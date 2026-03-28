@@ -11,30 +11,31 @@ export async function lookupTicker(ticker: string): Promise<TickerInfo | null> {
   if (cache.has(key)) return cache.get(key)!;
 
   try {
+    // Yahoo Finance search — no API key, works in React Native (no CORS)
     const res = await fetch(
-      `https://api.polygon.io/v3/reference/tickers/${key}?apiKey=demo`,
-      { signal: AbortSignal.timeout(5000) }
+      `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(key)}&quotesCount=5&newsCount=0&enableFuzzyQuery=false`,
+      {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(5000),
+      }
     );
     if (!res.ok) return null;
 
     const data = (await res.json()) as {
-      results?: { name?: string; homepage_url?: string };
+      quotes?: Array<{ symbol?: string; shortname?: string; longname?: string; quoteType?: string }>;
     };
 
-    const name = data?.results?.name;
+    // Find the exact symbol match (prefer equity)
+    const match =
+      data.quotes?.find(q => q.symbol === key && q.quoteType === 'EQUITY') ??
+      data.quotes?.find(q => q.symbol === key) ??
+      data.quotes?.[0];
+
+    const name = match?.shortname ?? match?.longname;
     if (!name) return null;
 
-    const homepageUrl = data?.results?.homepage_url;
-    let logoUrl: string | null = null;
-
-    if (homepageUrl) {
-      try {
-        const domain = new URL(homepageUrl).hostname.replace(/^www\./, '');
-        if (domain) logoUrl = `https://logo.clearbit.com/${domain}`;
-      } catch {
-        // malformed URL — skip logo
-      }
-    }
+    // FMP symbol logo — free, no API key, works for all major US equities/ETFs
+    const logoUrl = `https://images.financialmodelingprep.com/symbol/${key}.png`;
 
     const result: TickerInfo = { companyName: name, logoUrl };
     cache.set(key, result);

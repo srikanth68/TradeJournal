@@ -42,6 +42,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="calendar"
+        options={{
+          title: 'Calendar',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="journal"
         options={{
           title: 'Journal',
@@ -49,6 +58,11 @@ export default function TabLayout() {
             <Ionicons name="book" size={size} color={color} />
           ),
         }}
+      />
+      {/* Coach tab — available but hidden until API key feature is reviewed */}
+      <Tabs.Screen
+        name="coach"
+        options={{ href: null }}
       />
     </Tabs>
   );

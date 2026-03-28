@@ -242,8 +242,12 @@ function EditModal({ visible, position, onDone, onClose }: EditModalProps) {
           <ScrollView style={modalStyles.scroll} contentContainerStyle={modalStyles.scrollContent}>
             <Text style={modalStyles.sectionHeader}>Risk</Text>
             <View style={modalStyles.card}>
-              <ModalField label="Stop Loss" value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" placeholder="Optional" />
-              <ModalSep />
+              {position.status === 'open' && (
+                <>
+                  <ModalField label="Stop Loss" value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" placeholder="Optional" />
+                  <ModalSep />
+                </>
+              )}
               <ModalField label="Target Price" value={target} onChangeText={setTarget} keyboardType="decimal-pad" placeholder="Optional" />
             </View>
 
@@ -445,6 +449,12 @@ export default function PositionDetailScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Hero Card */}
         <View style={styles.heroCard}>
+          {/* Top accent stripe — green/red/orange based on status */}
+          <View style={[
+            styles.heroAccent,
+            isOpen ? styles.heroAccentOpen
+              : pnlValue != null && pnlValue >= 0 ? styles.heroAccentProfit : styles.heroAccentLoss,
+          ]} />
           <View style={styles.heroTop}>
             <View style={styles.heroLeft}>
               {position.companyLogoUrl ? (
@@ -696,10 +706,19 @@ const styles = StyleSheet.create({
   heroCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    paddingTop: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     marginTop: 16,
     gap: 16,
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07, shadowRadius: 8, elevation: 3,
   },
+  heroAccent: { height: 5, marginHorizontal: -16, marginBottom: 0 },
+  heroAccentOpen: { backgroundColor: '#FF9500' },
+  heroAccentProfit: { backgroundColor: '#34C759' },
+  heroAccentLoss: { backgroundColor: '#FF3B30' },
   heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -726,7 +745,7 @@ const styles = StyleSheet.create({
   pnlRow: { flexDirection: 'row', gap: 16 },
   pnlBlock: { flex: 1 },
   pnlLabel: { fontSize: 11, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 },
-  pnlValue: { fontSize: 20, fontWeight: '700' },
+  pnlValue: { fontSize: 24, fontWeight: '800' },
   pnlPos: { color: '#34C759' },
   pnlNeg: { color: '#FF3B30' },
   pnlNeutral: { fontSize: 17, fontWeight: '600', color: '#1C1C1E' },

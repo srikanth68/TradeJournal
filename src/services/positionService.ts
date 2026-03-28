@@ -1,4 +1,4 @@
-import { eq, desc, isNull } from 'drizzle-orm';
+import { eq, desc, isNull, and } from 'drizzle-orm';
 import { db, schema } from '../db';
 import { toStoredPrice } from '../utils/price';
 import { generateUUID } from '../utils/uuid';
@@ -151,7 +151,7 @@ export async function closePosition(
 export async function getPositions(status?: 'open' | 'closed'): Promise<PositionWithEntries[]> {
   const results = await db.query.positions.findMany({
     where: status
-      ? eq(schema.positions.status, status)
+      ? and(eq(schema.positions.status, status), isNull(schema.positions.deletedAt))
       : isNull(schema.positions.deletedAt),
     with: { entries: true },
     orderBy: [desc(schema.positions.createdAt)],

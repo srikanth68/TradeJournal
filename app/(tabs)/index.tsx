@@ -45,6 +45,11 @@ function PositionRow({ position }: { position: PositionWithEntries }) {
   const isClosed = position.status === 'closed';
   const pnl = position.realizedPnl;
   const avgEntry = position.avgEntryPrice;
+  const pnlValue = pnl != null ? fromStoredPrice(pnl) : null;
+
+  const accentColor = isClosed
+    ? (pnlValue != null && pnlValue >= 0 ? '#34C759' : '#FF3B30')
+    : '#FF9500';
 
   return (
     <TouchableOpacity
@@ -52,6 +57,8 @@ function PositionRow({ position }: { position: PositionWithEntries }) {
       activeOpacity={0.7}
       onPress={() => router.push({ pathname: '/position/[id]', params: { id: position.id } })}
     >
+      {/* Colored left accent stripe */}
+      <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
       <TickerAvatar ticker={position.ticker} tradeType={position.tradeType} logoUrl={position.companyLogoUrl} />
       <View style={styles.rowCenter}>
         <View style={styles.rowTitleRow}>
@@ -67,7 +74,7 @@ function PositionRow({ position }: { position: PositionWithEntries }) {
       <View style={styles.rowRight}>
         {isClosed && pnl != null ? (
           <>
-            <Text style={[styles.pnl, fromStoredPrice(pnl) >= 0 ? styles.pnlPositive : styles.pnlNegative]}>
+            <Text style={[styles.pnl, pnlValue! >= 0 ? styles.pnlPositive : styles.pnlNegative]}>
               {formatPnl(pnl)}
             </Text>
             <Text style={styles.rowRightSub}>Realized</Text>
@@ -234,7 +241,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16, marginTop: 16,
-    borderRadius: 12, padding: 16,
+    borderRadius: 14, padding: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
   summaryDivider: {
@@ -250,11 +259,14 @@ const styles = StyleSheet.create({
   rowWrapper: {
     marginHorizontal: 16, backgroundColor: '#FFFFFF',
     borderRadius: 12, marginBottom: 8, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
   },
   row: {
     flexDirection: 'row', alignItems: 'center',
-    padding: 12, gap: 12,
+    paddingVertical: 12, paddingRight: 12, gap: 12,
   },
+  accentBar: { width: 4, alignSelf: 'stretch', borderRadius: 0 },
   avatar: {
     width: 44, height: 44, borderRadius: 10, backgroundColor: '#F2F2F7',
   },
