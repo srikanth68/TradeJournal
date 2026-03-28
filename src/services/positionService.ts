@@ -1,6 +1,7 @@
 import { eq, desc, isNull } from 'drizzle-orm';
 import { db, schema } from '../db';
 import { toStoredPrice } from '../utils/price';
+import { generateUUID } from '../utils/uuid';
 import type { NewPosition, NewPositionEntry, Position, PositionEntry } from '../db/schema';
 
 export type PositionWithEntries = Position & { entries: PositionEntry[] };
@@ -31,8 +32,8 @@ type AddEntryData = {
 };
 
 export async function createPosition(data: CreatePositionData): Promise<string> {
-  const positionId = crypto.randomUUID();
-  const entryId = crypto.randomUUID();
+  const positionId = generateUUID();
+  const entryId = generateUUID();
   const now = new Date();
   const storedEntryPrice = toStoredPrice(data.entryPrice);
 
@@ -85,7 +86,7 @@ export async function addEntry(positionId: string, entryData: AddEntryData): Pro
   const now = new Date();
 
   await db.insert(schema.positionEntries).values({
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     positionId,
     entryPrice: storedEntryPrice,
     quantity: entryData.quantity,

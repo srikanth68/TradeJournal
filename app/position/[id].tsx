@@ -400,7 +400,7 @@ export default function PositionDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.loadingCenter}><ActivityIndicator size="large" color="#007AFF" /></View>
       </SafeAreaView>
     );
@@ -408,7 +408,7 @@ export default function PositionDetailScreen() {
 
   if (!position) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.loadingCenter}><Text style={styles.notFound}>Trade not found.</Text></View>
       </SafeAreaView>
     );
@@ -425,7 +425,7 @@ export default function PositionDetailScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.navHeader}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -681,10 +681,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5EA',
+    minHeight: 52,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', padding: 8 },
   backText: { fontSize: 17, color: '#007AFF' },

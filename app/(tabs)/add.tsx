@@ -11,7 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Modal,
 } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -38,7 +40,9 @@ export default function AddTradeScreen() {
   const [tradeType, setTradeType] = useState<TradeType>('buy');
   const [entryPrice, setEntryPrice] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [entryDate] = useState(new Date());
+  const [entryDate, setEntryDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | undefined>();
   const [showStrategyPicker, setShowStrategyPicker] = useState(false);
@@ -224,15 +228,23 @@ export default function AddTradeScreen() {
               <TextInput style={styles.input} placeholder="0" value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" />
             </View>
             <View style={styles.separator} />
-            <View style={styles.fieldRow}>
+            <TouchableOpacity
+              style={styles.fieldRow}
+              onPress={() => { setTempDate(entryDate); setShowDatePicker(true); }}
+            >
               <Text style={styles.label}>Date</Text>
-              <Text style={styles.staticValue}>
-                {entryDate.toLocaleDateString('en-US', {
-                  month: 'short', day: 'numeric', year: 'numeric',
-                  hour: '2-digit', minute: '2-digit',
-                })}
-              </Text>
-            </View>
+              <View style={styles.dateValueRow}>
+                <Text style={styles.dateValue}>
+                  {entryDate.toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', year: 'numeric',
+                  })}
+                </Text>
+                <Text style={styles.dateValueTime}>
+                  {entryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+              </View>
+            </TouchableOpacity>
           </View>
 
           <Text style={styles.sectionHeader}>Risk Management</Text>
@@ -327,6 +339,52 @@ export default function AddTradeScreen() {
         onClose={() => setShowStrategyPicker(false)}
         onStrategiesChange={setStrategies}
       />
+
+      {/* Date Picker — iOS modal sheet, Android native */}
+      {Platform.OS === 'android' && showDatePicker && (
+        <DateTimePicker
+          value={entryDate}
+          mode="datetime"
+          display="default"
+          onChange={(_: DateTimePickerEvent, date?: Date) => {
+            setShowDatePicker(false);
+            if (date) setEntryDate(date);
+          }}
+        />
+      )}
+
+      {Platform.OS === 'ios' && (
+        <Modal
+          visible={showDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View style={styles.dateModalOverlay}>
+            <View style={styles.dateModalSheet}>
+              <View style={styles.dateModalHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.dateModalCancel}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.dateModalTitle}>Entry Date & Time</Text>
+                <TouchableOpacity onPress={() => { setEntryDate(tempDate); setShowDatePicker(false); }}>
+                  <Text style={styles.dateModalDone}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="datetime"
+                display="spinner"
+                onChange={(_: DateTimePickerEvent, date?: Date) => {
+                  if (date) setTempDate(date);
+                }}
+                style={styles.datePickerSpinner}
+                textColor="#1C1C1E"
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -350,6 +408,28 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16, color: '#1C1C1E', textAlign: 'right' },
   placeholder: { color: '#C7C7CC' },
   staticValue: { flex: 1, fontSize: 16, color: '#8E8E93', textAlign: 'right' },
+  dateValueRow: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'flex-end', gap: 6,
+  },
+  dateValue: { fontSize: 16, color: '#1C1C1E' },
+  dateValueTime: { fontSize: 16, color: '#8E8E93' },
+  dateModalOverlay: {
+    flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  dateModalSheet: {
+    backgroundColor: '#FFFFFF', borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    paddingBottom: 32,
+  },
+  dateModalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E5EA',
+  },
+  dateModalTitle: { fontSize: 16, fontWeight: '600', color: '#1C1C1E' },
+  dateModalCancel: { fontSize: 16, color: '#8E8E93' },
+  dateModalDone: { fontSize: 16, fontWeight: '600', color: '#007AFF' },
+  datePickerSpinner: { height: 220 },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E5EA', marginLeft: 16 },
   tickerInputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   tickerInput: { flex: 1 },

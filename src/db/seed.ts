@@ -1,4 +1,5 @@
 import { db, schema } from './index';
+import { generateUUID } from '../utils/uuid';
 
 const PREDEFINED_STRATEGIES = [
   { name: 'Trend Following', description: 'Trading in the direction of the prevailing trend' },
@@ -34,7 +35,7 @@ export async function seedStrategies() {
 
   await db.insert(schema.strategies).values(
     PREDEFINED_STRATEGIES.map(s => ({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: s.name,
       description: s.description,
       isPredefined: true,

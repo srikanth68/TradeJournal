@@ -1,8 +1,9 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
+import { generateUUID } from '../utils/uuid';
 
 export const strategies = sqliteTable('strategies', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: text('id').primaryKey().$defaultFn(() => generateUUID()),
   name: text('name').notNull().unique(),
   description: text('description'),
   isPredefined: integer('is_predefined', { mode: 'boolean' }).notNull().default(true),
@@ -11,7 +12,7 @@ export const strategies = sqliteTable('strategies', {
 });
 
 export const positions = sqliteTable('positions', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: text('id').primaryKey().$defaultFn(() => generateUUID()),
   userId: text('user_id'),
   ticker: text('ticker').notNull(),
   companyName: text('company_name'),
@@ -49,7 +50,7 @@ export const positions = sqliteTable('positions', {
 });
 
 export const positionEntries = sqliteTable('position_entries', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: text('id').primaryKey().$defaultFn(() => generateUUID()),
   positionId: text('position_id').notNull().references(() => positions.id),
   entryPrice: integer('entry_price').notNull(),
   quantity: real('quantity').notNull(),

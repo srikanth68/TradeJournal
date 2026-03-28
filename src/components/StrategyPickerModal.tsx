@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { generateUUID } from '../utils/uuid';
 import {
   Modal,
   View,
@@ -70,7 +71,7 @@ export function StrategyPickerModal({
     }
     setSaving(true);
     try {
-      const id = crypto.randomUUID();
+      const id = generateUUID();
       await db.insert(schema.strategies).values({
         id,
         name: customName.trim(),
