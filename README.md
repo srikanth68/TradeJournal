@@ -6,6 +6,17 @@ TradeJournal is a cross-platform iOS/Android app built with React Native and Exp
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/v1/Calender.PNG" width="220" />
+  <img src="docs/screenshots/v1/AddTrade.png" width="220" />
+  <img src="docs/screenshots/v1/Dashboard.PNG" width="220" />
+ 
+</p>
+
+---
+
 ## Why This Exists
 
 Most trading journals are either desktop-only, spreadsheet-based, or buried inside a brokerage app. None of them feel like something you'd actually reach for on your phone mid-session. TradeJournal is built mobile-first, works fully offline, and is designed to grow with the trader — from manual logging in week one, to AI-assisted trade planning, to a full web portal with automatic trade import from your brokerage.
@@ -22,7 +33,7 @@ Most trading journals are either desktop-only, spreadsheet-based, or buried insi
 | Trade grade (A/B/C/D) — execution quality separate from P&L | ✅ Built |
 | Emotion tag (Confident / FOMO / Hesitant / Revenge / Bored / Patient) | ✅ Built |
 | Setup notes (pre-trade) + review notes (post-trade) | ✅ Built |
-| Market data auto-fill via Polygon.io + company logo via Clearbit | ✅ Built |
+| Market data auto-fill via Yahoo Finance + company logo via FMP | ✅ Built |
 | Multiple entries per position (adding to an open trade) | ✅ Built |
 | Trade log + detail views | ✅ Built |
 | Predefined strategy list + custom strategy creation | ✅ Built |
@@ -77,7 +88,7 @@ Most trading journals are either desktop-only, spreadsheet-based, or buried insi
 | Language | TypeScript | Financial data — prices, quantities, P&L calculations — demands type safety at compile time. |
 | Local DB | SQLite + Drizzle ORM | Offline-first MVP with no login friction. Drizzle's type-safe migrations make the later move to cloud non-destructive. |
 | Cloud DB | Supabase (Phase 2+) | PostgreSQL for analytical queries, Edge Functions for AI, generous free tier, open source. |
-| Market data | Polygon.io / Alpaca | Auto-fill current price on ticker entry. Free tier sufficient for personal use; 15-min cache prevents rate limit issues. |
+| Market data | Yahoo Finance + FMP | Auto-fill company name on ticker entry, logo via Financial Modeling Prep symbol images. No API key required. |
 | AI layer | Supabase Edge Functions (Phase 3) | API keys stay server-side, models are swappable without an app update, rate limiting is straightforward. |
 
 **Why React Native over Flutter?** The JS/TS ecosystem has significantly better financial library coverage. Expo's managed workflow means less time fighting native toolchains and more time building product. TypeScript is shared across the entire stack.
@@ -111,10 +122,12 @@ npx expo run:ios
 TradeJournal/
 ├── app/                        # Expo Router screens
 │   ├── (tabs)/
-│   │   ├── _layout.tsx         # Tab bar (Trades / Add Trade / Journal)
+│   │   ├── _layout.tsx         # Tab bar (Trades / Add Trade / Calendar / Journal)
 │   │   ├── index.tsx           # Trade Log screen
 │   │   ├── add.tsx             # Add Trade form
-│   │   └── journal.tsx         # Journal (placeholder)
+│   │   ├── calendar.tsx        # Monthly P&L heat-map calendar
+│   │   ├── coach.tsx           # AI Coach (hidden, Phase 2)
+│   │   └── journal.tsx         # Daily Journal (placeholder)
 │   ├── position/
 │   │   └── [id].tsx            # Position Detail screen
 │   └── _layout.tsx             # Root layout (migrations + seed)
@@ -127,7 +140,8 @@ TradeJournal/
 │   │   └── seed.ts             # Predefined strategy seed
 │   ├── services/
 │   │   ├── positionService.ts  # All position/entry DB operations
-│   │   └── tickerService.ts    # Polygon.io + Clearbit, session cache
+│   │   ├── tickerService.ts    # Yahoo Finance + FMP logo, session cache
+│   │   └── coachService.ts     # AI Coach via Claude API (Phase 2)
 │   └── utils/
 │       └── price.ts            # Price integer storage utilities
 ├── docs/                       # Project documentation
@@ -148,7 +162,7 @@ TradeJournal/
 ## Roadmap
 
 **Phase 1 — MVP ✅ Complete**
-Offline trade logging. Core data model. Add trade form with Polygon.io auto-fill + Clearbit logo. Strategy picker modal (predefined + custom). Trade grade + emotion tag. Full trade log and position detail views with Add Entry, Close Position, and Edit modals.
+Offline trade logging. Core data model. Add trade form with Yahoo Finance auto-fill + FMP company logos. Strategy picker modal (predefined + custom). Trade grade + emotion tag. Full trade log and position detail views with Add Entry, Close Position, and Edit modals. P&L calendar heat-map.
 
 **Phase 2 — Analytics & Cloud**
 Cloud sync + auth. Weekly/monthly summaries. Strategy and emotion tag insights. Charts and dashboard. Chart screenshot attachment. Daily journal. CSV + PDF export.
