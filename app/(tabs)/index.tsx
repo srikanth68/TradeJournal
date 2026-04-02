@@ -1,304 +1,542 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   RefreshControl,
   StyleSheet,
   ActivityIndicator,
-  Image,
+  Dimensions,
 } from 'react-native';
+import { useTheme, type AppColors } from '../../src/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, router } from 'expo-router';
-import { getPositions, type PositionWithEntries } from '../../src/services/positionService';
-import { formatPrice, formatPnl, fromStoredPrice } from '../../src/utils/price';
+import { useFocusEffect } from 'expo-router';
+import { BarChart } from 'react-native-gifted-charts';
+import {
+  getTopLevelStats,
+  getPnlByMonth,
+  getWinLossDistribution,
+  getStrategyInsights,
+  getTimeOfDayStats,
+  type PeriodFilter,
+  type TopLevelStats,
+  type MonthlyPnl,
+  type WinLossDistribution,
+  type StrategyInsight,
+  type TimeSlotStat,
+} from '../../src/services/analyticsService';
 
-function TickerAvatar({ ticker, tradeType, logoUrl }: { ticker: string; tradeType: 'buy' | 'short'; logoUrl?: string | null }) {
-  if (logoUrl) {
-    return (
-      <Image
-        source={{ uri: logoUrl }}
-        style={styles.avatar}
-        resizeMode="contain"
-      />
-    );
-  }
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CHART_WIDTH = SCREEN_WIDTH - 64; // 16px padding each side + 16px card padding each side
+
+// ─── Period Filter Pills ──────────────────────────────────────────────────────
+
+const PERIODS: { label: string; value: PeriodFilter }[] = [
+  { label: 'Week', value: 'week' },
+  { label: 'Month', value: 'month' },
+  { label: 'All Time', value: 'all' },
+];
+
+function PeriodPills({
+  selected,
+  onChange,
+}: {
+  selected: PeriodFilter;
+  onChange: (v: PeriodFilter) => void;
+}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
-    <View style={[styles.avatar, styles.avatarFallback, tradeType === 'short' && styles.avatarShort]}>
-      <Text style={styles.avatarText}>{ticker.slice(0, 2)}</Text>
+    <View style={styles.pillRow}>
+      {PERIODS.map((p) => (
+        <TouchableOpacity
+          key={p.value}
+          style={[styles.pill, selected === p.value && styles.pillActive]}
+          onPress={() => onChange(p.value)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.pillText, selected === p.value && styles.pillTextActive]}>
+            {p.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }
 
-function TradeTypeBadge({ type }: { type: 'buy' | 'short' }) {
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+
+function StatCard({
+  label,
+  value,
+  valueColor,
+  sub,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  sub?: string;
+}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
-    <View style={[styles.badge, type === 'short' && styles.badgeShort]}>
-      <Text style={[styles.badgeText, type === 'short' && styles.badgeTextShort]}>
-        {type === 'buy' ? 'LONG' : 'SHORT'}
+    <View style={styles.statCard}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, valueColor ? { color: valueColor } : undefined]}>{value}</Text>
+      {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
+    </View>
+  );
+}
+
+// ─── Section Card wrapper ─────────────────────────────────────────────────────
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+// ─── Empty Chart Placeholder ──────────────────────────────────────────────────
+
+function EmptyChart({ message }: { message: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  return (
+    <View style={styles.emptyChart}>
+      <Text style={styles.emptyChartText}>{message}</Text>
+    </View>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDollar(value: number, showSign = true): string {
+  const abs = Math.abs(value);
+  const sign = showSign ? (value < 0 ? '-' : value > 0 ? '+' : '') : '';
+  if (abs >= 1000) {
+    return `${sign}$${(abs / 1000).toFixed(1)}k`;
+  }
+  return `${sign}$${abs.toFixed(2)}`;
+}
+
+function pnlColor(value: number, colors: AppColors): string {
+  if (value > 0) return colors.profit;
+  if (value < 0) return colors.loss;
+  return colors.textSecondary;
+}
+
+function profitFactorDisplay(pf: number): string {
+  if (!isFinite(pf)) return '∞';
+  return pf.toFixed(2);
+}
+
+// ─── Strategy Row ─────────────────────────────────────────────────────────────
+
+function StrategyRow({ insight }: { insight: StrategyInsight }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isPositive = insight.totalPnl >= 0;
+  return (
+    <View style={styles.insightRow}>
+      <View style={[styles.insightDot, { backgroundColor: isPositive ? colors.profit : colors.loss }]} />
+      <View style={styles.insightCenter}>
+        <Text style={styles.insightName} numberOfLines={1}>{insight.strategyName}</Text>
+        <Text style={styles.insightSub}>
+          {insight.totalTrades} trade{insight.totalTrades !== 1 ? 's' : ''}
+          {'  ·  '}{insight.winRate.toFixed(0)}% win
+        </Text>
+      </View>
+      <Text style={[styles.insightPnl, { color: isPositive ? colors.profit : colors.loss }]}>
+        {formatDollar(insight.totalPnl, false)}
       </Text>
     </View>
   );
 }
 
-function PositionRow({ position }: { position: PositionWithEntries }) {
-  const isClosed = position.status === 'closed';
-  const pnl = position.realizedPnl;
-  const avgEntry = position.avgEntryPrice;
-  const pnlValue = pnl != null ? fromStoredPrice(pnl) : null;
+// ─── Time Slot Row ────────────────────────────────────────────────────────────
 
-  const accentColor = isClosed
-    ? (pnlValue != null && pnlValue >= 0 ? '#34C759' : '#FF3B30')
-    : '#FF9500';
-
+function TimeSlotRow({ stat }: { stat: TimeSlotStat }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isPositive = stat.avgPnl >= 0;
   return (
-    <TouchableOpacity
-      style={styles.row}
-      activeOpacity={0.7}
-      onPress={() => router.push({ pathname: '/position/[id]', params: { id: position.id } })}
-    >
-      {/* Colored left accent stripe */}
-      <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
-      <TickerAvatar ticker={position.ticker} tradeType={position.tradeType} logoUrl={position.companyLogoUrl} />
-      <View style={styles.rowCenter}>
-        <View style={styles.rowTitleRow}>
-          <Text style={styles.ticker}>{position.ticker}</Text>
-          <TradeTypeBadge type={position.tradeType} />
-        </View>
-        <Text style={styles.rowSub} numberOfLines={1}>
-          {avgEntry != null ? `Avg ${formatPrice(avgEntry)}` : 'No entry'}
-          {position.totalQuantity != null ? `  ·  ${position.totalQuantity} sh` : ''}
-          {position.companyName ? `  ·  ${position.companyName}` : ''}
-        </Text>
-      </View>
-      <View style={styles.rowRight}>
-        {isClosed && pnl != null ? (
-          <>
-            <Text style={[styles.pnl, pnlValue! >= 0 ? styles.pnlPositive : styles.pnlNegative]}>
-              {formatPnl(pnl)}
-            </Text>
-            <Text style={styles.rowRightSub}>Realized</Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.openLabel}>Open</Text>
-            <Text style={styles.rowRightSub}>{position.entries.length} entr{position.entries.length === 1 ? 'y' : 'ies'}</Text>
-          </>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>📊</Text>
-      <Text style={styles.emptyTitle}>No trades yet</Text>
-      <Text style={styles.emptySubtitle}>{message}</Text>
+    <View style={styles.insightRow}>
+      <Text style={styles.slotLabel}>{stat.slot}</Text>
+      <Text style={styles.slotTrades}>{stat.trades}t</Text>
+      <Text style={[styles.slotWinRate, { color: stat.winRate >= 50 ? colors.profit : colors.loss }]}>
+        {stat.winRate.toFixed(0)}%
+      </Text>
+      <Text style={[styles.slotPnl, { color: isPositive ? colors.profit : colors.loss }]}>
+        {formatDollar(stat.avgPnl, false)} avg
+      </Text>
     </View>
   );
 }
 
-type Section =
-  | { key: 'header' }
-  | { key: 'open-header' }
-  | { key: 'open-empty' }
-  | { key: 'closed-header' }
-  | { key: 'closed-empty' }
-  | { key: string; position: PositionWithEntries };
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export default function TradeLogScreen() {
-  const [openPositions, setOpenPositions] = useState<PositionWithEntries[]>([]);
-  const [closedPositions, setClosedPositions] = useState<PositionWithEntries[]>([]);
+export default function DashboardScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const [filter, setFilter] = useState<PeriodFilter>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadPositions = async () => {
-    try {
-      const [open, closed] = await Promise.all([
-        getPositions('open'),
-        getPositions('closed'),
-      ]);
-      setOpenPositions(open);
-      setClosedPositions(closed);
-    } catch (error) {
-      console.error('Failed to load positions:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const [stats, setStats] = useState<TopLevelStats | null>(null);
+  const [monthly, setMonthly] = useState<MonthlyPnl[]>([]);
+  const [distribution, setDistribution] = useState<WinLossDistribution | null>(null);
+  const [strategyInsights, setStrategyInsights] = useState<StrategyInsight[]>([]);
+  const [timeSlots, setTimeSlots] = useState<TimeSlotStat[]>([]);
+
+  const loadData = useCallback(
+    async (currentFilter: PeriodFilter) => {
+      try {
+        const [s, m, d, si, ts] = await Promise.all([
+          getTopLevelStats(currentFilter),
+          getPnlByMonth(6),
+          getWinLossDistribution(currentFilter),
+          getStrategyInsights(currentFilter),
+          getTimeOfDayStats(currentFilter),
+        ]);
+        setStats(s);
+        setMonthly(m);
+        setDistribution(d);
+        setStrategyInsights(si);
+        setTimeSlots(ts);
+      } catch (err) {
+        console.error('Dashboard load error:', err);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      loadPositions();
-    }, [])
+      loadData(filter);
+    }, []),
   );
+
+  const handleFilterChange = (newFilter: PeriodFilter) => {
+    setFilter(newFilter);
+    loadData(newFilter);
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadPositions();
+    loadData(filter);
   };
 
-  const totalRealizedPnl = closedPositions.reduce((sum, p) => sum + (p.realizedPnl ?? 0), 0);
-
-  const sections: Section[] = [
-    { key: 'header' },
-    { key: 'open-header' },
-    ...openPositions.map<Section>(p => ({ key: p.id, position: p })),
-    ...(openPositions.length === 0 ? [{ key: 'open-empty' } as Section] : []),
-    { key: 'closed-header' },
-    ...closedPositions.map<Section>(p => ({ key: p.id, position: p })),
-    ...(closedPositions.length === 0 ? [{ key: 'closed-empty' } as Section] : []),
-  ];
+  // ── Monthly bar data for gifted-charts ────────────────────────────────────
+  const barData = monthly.map((m) => ({
+    value: Math.abs(m.pnl),
+    frontColor: m.pnl >= 0 ? colors.profit : colors.loss,
+    label: m.label,
+    topLabelComponent: () => (
+      <Text style={[styles.barTopLabel, { color: m.pnl >= 0 ? colors.profit : colors.loss }]}>
+        {m.pnl !== 0 ? formatDollar(m.pnl) : ''}
+      </Text>
+    ),
+  }));
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
     );
   }
 
+  const totalTrades = stats?.totalTrades ?? 0;
+  const winLossTotal = (distribution?.wins ?? 0) + (distribution?.losses ?? 0) + (distribution?.breakeven ?? 0);
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <FlatList
-        data={sections}
-        keyExtractor={item => item.key}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        renderItem={({ item }) => {
-          if (item.key === 'header') {
-            return (
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Open Positions</Text>
-                  <Text style={styles.summaryValue}>{openPositions.length}</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Total Closed</Text>
-                  <Text style={styles.summaryValue}>{closedPositions.length}</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Realized P&L</Text>
-                  <Text style={[
-                    styles.summaryValue,
-                    fromStoredPrice(totalRealizedPnl) >= 0 ? styles.pnlPositive : styles.pnlNegative,
-                  ]}>
-                    {formatPnl(totalRealizedPnl)}
-                  </Text>
-                </View>
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Period filter */}
+        <PeriodPills selected={filter} onChange={handleFilterChange} />
+
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          <StatCard
+            label="Total P&L"
+            value={stats ? formatDollar(stats.totalPnl, false) : '$0.00'}
+            valueColor={stats ? pnlColor(stats.totalPnl, colors) : undefined}
+          />
+          <StatCard
+            label="Win Rate"
+            value={stats ? `${stats.winRate.toFixed(1)}%` : '0%'}
+            valueColor={stats && stats.winRate >= 50 ? colors.profit : colors.loss}
+          />
+          <StatCard
+            label="Trades"
+            value={totalTrades.toString()}
+            sub={stats ? `${stats.openPositions} open` : undefined}
+          />
+          <StatCard
+            label="Prof. Factor"
+            value={stats ? profitFactorDisplay(stats.profitFactor) : '—'}
+            valueColor={stats && stats.profitFactor >= 1 ? colors.profit : colors.loss}
+          />
+        </View>
+
+        {/* Monthly P&L */}
+        <SectionCard title="Monthly P&L">
+          {barData.every((b) => b.value === 0) ? (
+            <EmptyChart message="No closed trades yet to show monthly P&L." />
+          ) : (
+            <View style={styles.chartContainer}>
+              <BarChart
+                data={barData}
+                width={CHART_WIDTH}
+                height={140}
+                barWidth={Math.max(18, Math.floor(CHART_WIDTH / barData.length) - 12)}
+                barBorderRadius={4}
+                hideRules={false}
+                rulesColor={colors.background}
+                yAxisColor={colors.border}
+                xAxisColor={colors.border}
+                yAxisTextStyle={styles.axisLabel}
+                xAxisLabelTextStyle={styles.axisLabel}
+                noOfSections={3}
+                yAxisLabelPrefix="$"
+                formatYLabel={(v) => {
+                  const n = parseFloat(v);
+                  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(0)}k`;
+                  return n.toFixed(0);
+                }}
+                isAnimated
+                animationDuration={500}
+              />
+            </View>
+          )}
+        </SectionCard>
+
+        {/* Win / Loss / Breakeven */}
+        <SectionCard title="Outcome Distribution">
+          {winLossTotal === 0 ? (
+            <EmptyChart message="Close some trades to see your outcome distribution." />
+          ) : (
+            <View style={styles.distributionRow}>
+              <View style={styles.distItem}>
+                <View style={[styles.distDot, { backgroundColor: '#34C759' }]} />
+                <Text style={styles.distCount}>{distribution?.wins ?? 0}</Text>
+                <Text style={styles.distLabel}>Wins</Text>
+                <Text style={styles.distPct}>
+                  {winLossTotal > 0
+                    ? `${(((distribution?.wins ?? 0) / winLossTotal) * 100).toFixed(0)}%`
+                    : '—'}
+                </Text>
               </View>
-            );
-          }
-
-          if (item.key === 'open-header') {
-            return <Text style={styles.sectionHeader}>Open Positions</Text>;
-          }
-
-          if (item.key === 'closed-header') {
-            return <Text style={styles.sectionHeader}>Closed Positions</Text>;
-          }
-
-          if (item.key === 'open-empty') {
-            return <EmptyState message="Add your first trade using the + tab." />;
-          }
-
-          if (item.key === 'closed-empty') {
-            return (
-              <View style={styles.emptyMinimal}>
-                <Text style={styles.emptyMinimalText}>No closed trades yet.</Text>
+              <View style={styles.distDivider} />
+              <View style={styles.distItem}>
+                <View style={[styles.distDot, { backgroundColor: '#FF3B30' }]} />
+                <Text style={styles.distCount}>{distribution?.losses ?? 0}</Text>
+                <Text style={styles.distLabel}>Losses</Text>
+                <Text style={styles.distPct}>
+                  {winLossTotal > 0
+                    ? `${(((distribution?.losses ?? 0) / winLossTotal) * 100).toFixed(0)}%`
+                    : '—'}
+                </Text>
               </View>
-            );
-          }
-
-          if ('position' in item) {
-            return (
-              <View style={styles.rowWrapper}>
-                <PositionRow position={item.position} />
+              <View style={styles.distDivider} />
+              <View style={styles.distItem}>
+                <View style={[styles.distDot, { backgroundColor: '#8E8E93' }]} />
+                <Text style={styles.distCount}>{distribution?.breakeven ?? 0}</Text>
+                <Text style={styles.distLabel}>Breakeven</Text>
+                <Text style={styles.distPct}>
+                  {winLossTotal > 0
+                    ? `${(((distribution?.breakeven ?? 0) / winLossTotal) * 100).toFixed(0)}%`
+                    : '—'}
+                </Text>
               </View>
-            );
-          }
+            </View>
+          )}
+        </SectionCard>
+        {/* Strategy Insights */}
+        <SectionCard title="Strategy Insights">
+          {strategyInsights.length === 0 ? (
+            <EmptyChart message="Log trades with a strategy to see insights." />
+          ) : (
+            strategyInsights.map((s) => <StrategyRow key={s.strategyId} insight={s} />)
+          )}
+        </SectionCard>
 
-          return null;
-        }}
-        contentContainerStyle={styles.listContent}
-      />
+        {/* Time of Day */}
+        <SectionCard title="Time of Day">
+          {timeSlots.length === 0 ? (
+            <EmptyChart message="Log trades to see your peak performance windows." />
+          ) : (
+            timeSlots.map((t) => <TimeSlotRow key={t.slot} stat={t} />)
+          )}
+        </SectionCard>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  listContent: { paddingBottom: 24 },
-  summaryCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16, marginTop: 16,
-    borderRadius: 14, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
-  },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryDivider: {
-    width: StyleSheet.hairlineWidth, backgroundColor: '#E5E5EA', marginVertical: 4,
-  },
-  summaryLabel: { fontSize: 11, color: '#8E8E93', marginBottom: 4 },
-  summaryValue: { fontSize: 18, fontWeight: '700', color: '#1C1C1E' },
-  sectionHeader: {
-    fontSize: 13, fontWeight: '600', color: '#6D6D72',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 20, marginBottom: 8, marginLeft: 20,
-  },
-  rowWrapper: {
-    marginHorizontal: 16, backgroundColor: '#FFFFFF',
-    borderRadius: 12, marginBottom: 8, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
-  },
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 12, paddingRight: 12, gap: 12,
-  },
-  accentBar: { width: 4, alignSelf: 'stretch', borderRadius: 0 },
-  avatar: {
-    width: 44, height: 44, borderRadius: 10, backgroundColor: '#F2F2F7',
-  },
-  avatarFallback: {
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarShort: { backgroundColor: '#FF3B30' },
-  avatarText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-  rowCenter: { flex: 1, minWidth: 0 },
-  rowTitleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4,
-  },
-  ticker: { fontSize: 16, fontWeight: '700', color: '#1C1C1E' },
-  badge: {
-    backgroundColor: '#E5F1FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-  },
-  badgeShort: { backgroundColor: '#FFE5E5' },
-  badgeText: { fontSize: 10, fontWeight: '700', color: '#007AFF' },
-  badgeTextShort: { color: '#FF3B30' },
-  rowSub: { fontSize: 12, color: '#8E8E93' },
-  rowRight: { alignItems: 'flex-end', minWidth: 70 },
-  rowRightSub: { fontSize: 11, color: '#C7C7CC', marginTop: 2 },
-  pnl: { fontSize: 15, fontWeight: '600' },
-  pnlPositive: { color: '#34C759' },
-  pnlNegative: { color: '#FF3B30' },
-  openLabel: { fontSize: 13, color: '#FF9500', fontWeight: '600' },
-  emptyState: {
-    alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24,
-  },
-  emptyIcon: { fontSize: 40, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C1E', marginBottom: 6 },
-  emptySubtitle: { fontSize: 14, color: '#8E8E93', textAlign: 'center' },
-  emptyMinimal: { paddingVertical: 16, paddingHorizontal: 20 },
-  emptyMinimalText: { fontSize: 14, color: '#8E8E93' },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    scrollContent: { paddingBottom: 32 },
+
+    // Period pills
+    pillRow: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 8,
+    },
+    pill: {
+      paddingHorizontal: 16,
+      paddingVertical: 7,
+      borderRadius: 20,
+      backgroundColor: c.surfaceHigh,
+    },
+    pillActive: { backgroundColor: c.primary },
+    pillText: { fontSize: 13, fontWeight: '600', color: c.textPrimary },
+    pillTextActive: { color: '#FFFFFF' },
+
+    // Stats row
+    statsRow: {
+      flexDirection: 'row',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 10,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    statLabel: { fontSize: 10, color: c.textSecondary, marginBottom: 4, textAlign: 'center' },
+    statValue: { fontSize: 15, fontWeight: '700', color: c.textPrimary, textAlign: 'center' },
+    statSub: { fontSize: 10, color: c.textTertiary, marginTop: 2, textAlign: 'center' },
+
+    // Section cards
+    card: {
+      backgroundColor: c.surface,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      borderRadius: 14,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    cardTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: c.textPrimary,
+      marginBottom: 12,
+    },
+
+    // Charts
+    chartContainer: { marginLeft: -4 },
+    axisLabel: { fontSize: 10, color: c.textSecondary },
+    barTopLabel: { fontSize: 8, color: c.textSecondary, textAlign: 'center' },
+
+    // Empty chart
+    emptyChart: {
+      height: 80,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyChartText: {
+      fontSize: 13,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+
+    // Distribution
+    distributionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    distItem: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    distDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginBottom: 6,
+    },
+    distCount: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    distLabel: {
+      fontSize: 11,
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    distPct: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textPrimary,
+      marginTop: 2,
+    },
+    distDivider: {
+      width: StyleSheet.hairlineWidth,
+      backgroundColor: c.separator,
+      alignSelf: 'stretch',
+      marginVertical: 8,
+    },
+
+    // Strategy / Time-of-Day rows
+    insightRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 9,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.background,
+      gap: 10,
+    },
+    insightDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      flexShrink: 0,
+    },
+    insightCenter: { flex: 1, minWidth: 0 },
+    insightName: { fontSize: 14, fontWeight: '600', color: c.textPrimary },
+    insightSub: { fontSize: 11, color: c.textSecondary, marginTop: 1 },
+    insightPnl: { fontSize: 14, fontWeight: '700', flexShrink: 0 },
+
+    // Time slot row
+    slotLabel: { fontSize: 12, fontWeight: '600', color: c.textPrimary, width: 96 },
+    slotTrades: { fontSize: 11, color: c.textSecondary, width: 24, textAlign: 'center' },
+    slotWinRate: { fontSize: 12, fontWeight: '600', width: 36, textAlign: 'center' },
+    slotPnl: { flex: 1, fontSize: 12, fontWeight: '600', textAlign: 'right' },
+  });
+}

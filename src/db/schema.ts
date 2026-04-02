@@ -63,6 +63,17 @@ export const positionEntries = sqliteTable('position_entries', {
   deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
 });
 
+export const dailyJournals = sqliteTable('daily_journals', {
+  id: text('id').primaryKey().$defaultFn(() => generateUUID()),
+  date: text('date').notNull().unique(), // YYYY-MM-DD
+  marketNotes: text('market_notes'),
+  mindsetNotes: text('mindset_notes'),
+  lessons: text('lessons'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
+});
+
 export const strategiesRelations = relations(strategies, ({ many }) => ({
   positions: many(positions),
 }));
@@ -82,3 +93,5 @@ export type Position = typeof positions.$inferSelect;
 export type NewPosition = typeof positions.$inferInsert;
 export type PositionEntry = typeof positionEntries.$inferSelect;
 export type NewPositionEntry = typeof positionEntries.$inferInsert;
+export type DailyJournal = typeof dailyJournals.$inferSelect;
+export type NewDailyJournal = typeof dailyJournals.$inferInsert;

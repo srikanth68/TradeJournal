@@ -10,7 +10,7 @@ TradeJournal is a cross-platform iOS/Android app built with React Native and Exp
 
 <p align="center">
   <img src="docs/screenshots/v1/Calender.PNG" width="220" />
-  <img src="docs/screenshots/v1/AddTrade.png" width="220" />
+  <img src="docs/screenshots/v1/AddTrade.PNG" width="220" />
   <img src="docs/screenshots/v1/Dashboard.PNG" width="220" />
  
 </p>

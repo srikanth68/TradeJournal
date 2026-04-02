@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme, type AppColors } from '../../src/theme';
 import { getPositions, type PositionWithEntries } from '../../src/services/positionService';
 import { streamCoachReply, type Message } from '../../src/services/coachService';
 
@@ -32,6 +33,8 @@ const STARTERS = [
 // ─── API Key Setup ────────────────────────────────────────────────────────────
 
 function ApiKeySetup({ onSave }: { onSave: (key: string) => void }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [key, setKey] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -68,7 +71,7 @@ function ApiKeySetup({ onSave }: { onSave: (key: string) => void }) {
       <TextInput
         style={styles.keyInput}
         placeholder="sk-ant-api03-..."
-        placeholderTextColor="#C7C7CC"
+        placeholderTextColor={colors.textTertiary}
         value={key}
         onChangeText={setKey}
         autoCorrect={false}
@@ -91,6 +94,8 @@ function ApiKeySetup({ onSave }: { onSave: (key: string) => void }) {
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 
 function Bubble({ message }: { message: Message & { streaming?: boolean } }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const isUser = message.role === 'user';
   return (
     <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
@@ -112,6 +117,8 @@ function Bubble({ message }: { message: Message & { streaming?: boolean } }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function CoachScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keyLoaded, setKeyLoaded] = useState(false);
   const [positions, setPositions] = useState<PositionWithEntries[]>([]);
@@ -148,8 +155,6 @@ export default function CoachScreen() {
     setLoading(true);
     scrollToBottom();
 
-    // Add empty assistant placeholder
-    const assistantId = Date.now();
     setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true }]);
 
     let accumulated = '';
@@ -162,9 +167,7 @@ export default function CoachScreen() {
         setMessages(prev => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
-          if (last?.role === 'assistant') {
-            copy[copy.length - 1] = { ...last, content: accumulated };
-          }
+          if (last?.role === 'assistant') copy[copy.length - 1] = { ...last, content: accumulated };
           return copy;
         });
         scrollToBottom();
@@ -173,16 +176,14 @@ export default function CoachScreen() {
         setMessages(prev => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
-          if (last?.role === 'assistant') {
-            copy[copy.length - 1] = { ...last, streaming: false };
-          }
+          if (last?.role === 'assistant') copy[copy.length - 1] = { ...last, streaming: false };
           return copy;
         });
         setLoading(false);
         scrollToBottom();
       },
       err => {
-        setMessages(prev => prev.slice(0, -1)); // remove empty placeholder
+        setMessages(prev => prev.slice(0, -1));
         setLoading(false);
         Alert.alert('Error', err.includes('auth') ? 'Invalid API key. Tap ⚙ to update it.' : err);
       }
@@ -207,7 +208,7 @@ export default function CoachScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -224,6 +225,7 @@ export default function CoachScreen() {
   }
 
   const hasMessages = messages.length > 0;
+  const closedCount = positions.filter(p => p.status === 'closed').length;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -232,18 +234,16 @@ export default function CoachScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={90}
       >
-        {/* Toolbar */}
         <View style={styles.toolbar}>
           <View style={styles.toolbarLeft}>
             <View style={styles.onlineDot} />
             <Text style={styles.toolbarTitle}>AI Trade Coach</Text>
           </View>
           <TouchableOpacity onPress={clearKey} style={styles.toolbarBtn}>
-            <Ionicons name="settings-outline" size={20} color="#8E8E93" />
+            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
-        {/* Messages */}
         <ScrollView
           ref={scrollRef}
           style={styles.messageList}
@@ -253,16 +253,16 @@ export default function CoachScreen() {
           {!hasMessages ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>
-                {positions.filter(p => p.status === 'closed').length > 0
-                  ? `I've analyzed your ${positions.filter(p => p.status === 'closed').length} closed trades.`
+                {closedCount > 0
+                  ? `I've analyzed your ${closedCount} closed trades.`
                   : 'No closed trades yet.'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                {positions.filter(p => p.status === 'closed').length > 0
+                {closedCount > 0
                   ? 'Ask me anything about your trading.'
                   : 'Add some trades and come back for insights.'}
               </Text>
-              {positions.filter(p => p.status === 'closed').length > 0 && (
+              {closedCount > 0 && (
                 <View style={styles.starters}>
                   {STARTERS.map(s => (
                     <TouchableOpacity key={s} style={styles.starterChip} onPress={() => send(s)}>
@@ -277,12 +277,11 @@ export default function CoachScreen() {
           )}
         </ScrollView>
 
-        {/* Input */}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.inputField}
             placeholder="Ask your coach..."
-            placeholderTextColor="#C7C7CC"
+            placeholderTextColor={colors.textTertiary}
             value={input}
             onChangeText={setInput}
             multiline
@@ -305,100 +304,93 @@ export default function CoachScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
-  // Setup
-  setupScroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  setupContainer: { alignItems: 'center' },
-  setupIcon: {
-    width: 80, height: 80, borderRadius: 20,
-    backgroundColor: '#E5F1FF',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
-  },
-  setupEmoji: { fontSize: 40 },
-  setupTitle: { fontSize: 22, fontWeight: '700', color: '#1C1C1E', marginBottom: 12, textAlign: 'center' },
-  setupDesc: { fontSize: 14, color: '#6D6D72', lineHeight: 21, textAlign: 'center', marginBottom: 16 },
-  setupLink: { marginBottom: 20 },
-  setupLinkText: { fontSize: 15, color: '#007AFF', fontWeight: '600' },
-  keyInput: {
-    width: '100%', backgroundColor: '#FFFFFF', borderRadius: 12,
-    padding: 14, fontSize: 14, color: '#1C1C1E',
-    borderWidth: 1, borderColor: '#E5E5EA',
-    marginBottom: 14,
-  },
-  setupBtn: {
-    width: '100%', backgroundColor: '#007AFF', borderRadius: 12,
-    padding: 16, alignItems: 'center',
-  },
-  setupBtnDisabled: { opacity: 0.5 },
-  setupBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    container: { flex: 1, backgroundColor: c.background },
+    loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  // Toolbar
-  toolbar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E5EA',
-  },
-  toolbarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' },
-  toolbarTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E' },
-  toolbarBtn: { padding: 4 },
+    setupScroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+    setupContainer: { alignItems: 'center' },
+    setupIcon: {
+      width: 80, height: 80, borderRadius: 20,
+      backgroundColor: c.longBadgeBg,
+      alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+    },
+    setupEmoji: { fontSize: 40 },
+    setupTitle: { fontSize: 22, fontWeight: '700', color: c.textPrimary, marginBottom: 12, textAlign: 'center' },
+    setupDesc: { fontSize: 14, color: c.textSecondary, lineHeight: 21, textAlign: 'center', marginBottom: 16 },
+    setupLink: { marginBottom: 20 },
+    setupLinkText: { fontSize: 15, color: c.primary, fontWeight: '600' },
+    keyInput: {
+      width: '100%', backgroundColor: c.surface, borderRadius: 12,
+      padding: 14, fontSize: 14, color: c.textPrimary,
+      borderWidth: 1, borderColor: c.border, marginBottom: 14,
+    },
+    setupBtn: {
+      width: '100%', backgroundColor: c.primary, borderRadius: 12,
+      padding: 16, alignItems: 'center',
+    },
+    setupBtnDisabled: { opacity: 0.5 },
+    setupBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
 
-  // Messages
-  messageList: { flex: 1 },
-  messageContent: { paddingHorizontal: 12, paddingVertical: 16, gap: 12 },
-  messageContentCentered: { flexGrow: 1, justifyContent: 'center' },
+    toolbar: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 16, paddingVertical: 10,
+      backgroundColor: c.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+    },
+    toolbarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.profit },
+    toolbarTitle: { fontSize: 16, fontWeight: '700', color: c.textPrimary },
+    toolbarBtn: { padding: 4 },
 
-  emptyState: { alignItems: 'center', paddingHorizontal: 16 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: '#1C1C1E', textAlign: 'center', marginBottom: 6 },
-  emptySubtitle: { fontSize: 14, color: '#8E8E93', textAlign: 'center', marginBottom: 24 },
-  starters: { gap: 8, width: '100%' },
-  starterChip: {
-    backgroundColor: '#FFFFFF', borderRadius: 10, padding: 12,
-    borderWidth: 1, borderColor: '#E5E5EA',
-  },
-  starterText: { fontSize: 14, color: '#007AFF' },
+    messageList: { flex: 1 },
+    messageContent: { paddingHorizontal: 12, paddingVertical: 16, gap: 12 },
+    messageContentCentered: { flexGrow: 1, justifyContent: 'center' },
 
-  // Bubbles
-  bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  bubbleRowUser: { justifyContent: 'flex-end' },
-  coachAvatar: {
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: '#007AFF',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 2,
-  },
-  coachAvatarText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
-  bubble: {
-    maxWidth: '78%', borderRadius: 16, padding: 12,
-  },
-  bubbleUser: { backgroundColor: '#007AFF', borderBottomRightRadius: 4 },
-  bubbleAssistant: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
-  bubbleText: { fontSize: 15, color: '#1C1C1E', lineHeight: 21 },
-  bubbleTextUser: { color: '#FFFFFF' },
-  cursor: { color: '#007AFF' },
+    emptyState: { alignItems: 'center', paddingHorizontal: 16 },
+    emptyTitle: { fontSize: 17, fontWeight: '700', color: c.textPrimary, textAlign: 'center', marginBottom: 6 },
+    emptySubtitle: { fontSize: 14, color: c.textSecondary, textAlign: 'center', marginBottom: 24 },
+    starters: { gap: 8, width: '100%' },
+    starterChip: {
+      backgroundColor: c.surface, borderRadius: 10, padding: 12,
+      borderWidth: 1, borderColor: c.border,
+    },
+    starterText: { fontSize: 14, color: c.primary },
 
-  // Input bar
-  inputBar: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E5EA',
-  },
-  inputField: {
-    flex: 1, backgroundColor: '#F2F2F7', borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 8,
-    fontSize: 15, color: '#1C1C1E', maxHeight: 100,
-  },
-  sendBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: '#007AFF',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  sendBtnDisabled: { backgroundColor: '#C7C7CC' },
-});
+    bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+    bubbleRowUser: { justifyContent: 'flex-end' },
+    coachAvatar: {
+      width: 28, height: 28, borderRadius: 8,
+      backgroundColor: c.primary,
+      alignItems: 'center', justifyContent: 'center', marginBottom: 2,
+    },
+    coachAvatarText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
+    bubble: { maxWidth: '78%', borderRadius: 16, padding: 12 },
+    bubbleUser: { backgroundColor: c.primary, borderBottomRightRadius: 4 },
+    bubbleAssistant: { backgroundColor: c.surface, borderBottomLeftRadius: 4 },
+    bubbleText: { fontSize: 15, color: c.textPrimary, lineHeight: 21 },
+    bubbleTextUser: { color: '#FFFFFF' },
+    cursor: { color: c.primary },
+
+    inputBar: {
+      flexDirection: 'row', alignItems: 'flex-end', gap: 8,
+      paddingHorizontal: 12, paddingVertical: 10,
+      backgroundColor: c.surface,
+      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+    },
+    inputField: {
+      flex: 1, backgroundColor: c.surfaceHigh, borderRadius: 20,
+      paddingHorizontal: 14, paddingVertical: 8,
+      fontSize: 15, color: c.textPrimary, maxHeight: 100,
+    },
+    sendBtn: {
+      width: 34, height: 34, borderRadius: 17,
+      backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center',
+    },
+    sendBtnDisabled: { backgroundColor: c.textTertiary },
+  });
+}

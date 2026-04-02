@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useTheme, type AppColors } from '../../src/theme';
 import { db, schema } from '../../src/db';
 import { createPosition } from '../../src/services/positionService';
 import { lookupTicker } from '../../src/services/tickerService';
@@ -33,6 +34,8 @@ const EMOTION_LABELS: Record<EmotionTag, string> = {
 };
 
 export default function AddTradeScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [ticker, setTicker] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
@@ -155,6 +158,7 @@ export default function AddTradeScreen() {
                 <TextInput
                   style={[styles.input, styles.tickerInput]}
                   placeholder="AAPL"
+                  placeholderTextColor={colors.textTertiary}
                   value={ticker}
                   onChangeText={t => setTicker(t.toUpperCase())}
                   autoCapitalize="characters"
@@ -188,6 +192,7 @@ export default function AddTradeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Optional"
+                placeholderTextColor={colors.textTertiary}
                 value={companyName}
                 onChangeText={setCompanyName}
               />
@@ -220,12 +225,12 @@ export default function AddTradeScreen() {
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Entry Price</Text>
-              <TextInput style={styles.input} placeholder="0.00" value={entryPrice} onChangeText={setEntryPrice} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="0.00" placeholderTextColor={colors.textTertiary} value={entryPrice} onChangeText={setEntryPrice} keyboardType="decimal-pad" />
             </View>
             <View style={styles.separator} />
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Quantity</Text>
-              <TextInput style={styles.input} placeholder="0" value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="0" placeholderTextColor={colors.textTertiary} value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" />
             </View>
             <View style={styles.separator} />
             <TouchableOpacity
@@ -251,12 +256,12 @@ export default function AddTradeScreen() {
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Stop Loss</Text>
-              <TextInput style={styles.input} placeholder="Optional" value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={colors.textTertiary} value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" />
             </View>
             <View style={styles.separator} />
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Target Price</Text>
-              <TextInput style={styles.input} placeholder="Optional" value={targetPrice} onChangeText={setTargetPrice} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={colors.textTertiary} value={targetPrice} onChangeText={setTargetPrice} keyboardType="decimal-pad" />
             </View>
           </View>
 
@@ -309,6 +314,7 @@ export default function AddTradeScreen() {
             <TextInput
               style={styles.textarea}
               placeholder="Describe your setup, thesis, or key levels..."
+              placeholderTextColor={colors.textTertiary}
               value={setupNotes}
               onChangeText={setSetupNotes}
               multiline
@@ -379,7 +385,7 @@ export default function AddTradeScreen() {
                   if (date) setTempDate(date);
                 }}
                 style={styles.datePickerSpinner}
-                textColor="#1C1C1E"
+                textColor={colors.textPrimary}
               />
             </View>
           </View>
@@ -389,94 +395,96 @@ export default function AddTradeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
-  sectionHeader: {
-    fontSize: 13, fontWeight: '600', color: '#6D6D72',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 20, marginBottom: 8, marginLeft: 4,
-  },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden' },
-  fieldRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12, minHeight: 48,
-  },
-  label: { fontSize: 16, color: '#1C1C1E', width: 110, flexShrink: 0 },
-  input: { flex: 1, fontSize: 16, color: '#1C1C1E', textAlign: 'right' },
-  placeholder: { color: '#C7C7CC' },
-  staticValue: { flex: 1, fontSize: 16, color: '#8E8E93', textAlign: 'right' },
-  dateValueRow: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'flex-end', gap: 6,
-  },
-  dateValue: { fontSize: 16, color: '#1C1C1E' },
-  dateValueTime: { fontSize: 16, color: '#8E8E93' },
-  dateModalOverlay: {
-    flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  dateModalSheet: {
-    backgroundColor: '#FFFFFF', borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    paddingBottom: 32,
-  },
-  dateModalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E5EA',
-  },
-  dateModalTitle: { fontSize: 16, fontWeight: '600', color: '#1C1C1E' },
-  dateModalCancel: { fontSize: 16, color: '#8E8E93' },
-  dateModalDone: { fontSize: 16, fontWeight: '600', color: '#007AFF' },
-  datePickerSpinner: { height: 220 },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E5EA', marginLeft: 16 },
-  tickerInputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
-  tickerInput: { flex: 1 },
-  tickerSpinner: { marginLeft: 8 },
-  tickerPreview: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingBottom: 10,
-  },
-  tickerLogo: { width: 24, height: 24, borderRadius: 4, backgroundColor: '#F2F2F7' },
-  tickerPreviewName: { flex: 1, fontSize: 13, color: '#6D6D72' },
-  toggleRow: { flexDirection: 'row', padding: 8, gap: 8 },
-  toggleBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 8,
-    alignItems: 'center', backgroundColor: '#F2F2F7',
-  },
-  toggleBtnBuy: { backgroundColor: '#34C759' },
-  toggleBtnShort: { backgroundColor: '#FF3B30' },
-  toggleText: { fontSize: 15, fontWeight: '600', color: '#8E8E93' },
-  toggleTextActive: { color: '#FFFFFF' },
-  strategyValue: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
-  },
-  sublabel: {
-    fontSize: 13, fontWeight: '500', color: '#6D6D72',
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
-  },
-  chipRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
-  gradeBtn: {
-    width: 48, height: 48, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F2F7',
-  },
-  gradeBtnActive: { backgroundColor: '#007AFF' },
-  gradeText: { fontSize: 17, fontWeight: '700', color: '#8E8E93' },
-  gradeTextActive: { color: '#FFFFFF' },
-  emotionScroll: { paddingHorizontal: 12, paddingBottom: 12 },
-  emotionChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
-    backgroundColor: '#F2F2F7', marginRight: 8,
-  },
-  emotionChipActive: { backgroundColor: '#5856D6' },
-  emotionText: { fontSize: 14, fontWeight: '500', color: '#8E8E93' },
-  emotionTextActive: { color: '#FFFFFF' },
-  textarea: { padding: 16, fontSize: 15, color: '#1C1C1E', minHeight: 100 },
-  submitBtn: {
-    backgroundColor: '#007AFF', borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center', marginTop: 24,
-  },
-  submitBtnDisabled: { opacity: 0.6 },
-  submitText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    container: { flex: 1, backgroundColor: c.background },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
+    sectionHeader: {
+      fontSize: 13, fontWeight: '600', color: c.sectionHeader,
+      textTransform: 'uppercase', letterSpacing: 0.5,
+      marginTop: 20, marginBottom: 8, marginLeft: 4,
+    },
+    card: { backgroundColor: c.surface, borderRadius: 12, overflow: 'hidden' },
+    fieldRow: {
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: 16, paddingVertical: 12, minHeight: 48,
+    },
+    label: { fontSize: 16, color: c.textPrimary, width: 110, flexShrink: 0 },
+    input: { flex: 1, fontSize: 16, color: c.textPrimary, textAlign: 'right' },
+    placeholder: { color: c.textTertiary },
+    staticValue: { flex: 1, fontSize: 16, color: c.textSecondary, textAlign: 'right' },
+    dateValueRow: {
+      flex: 1, flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'flex-end', gap: 6,
+    },
+    dateValue: { fontSize: 16, color: c.textPrimary },
+    dateValueTime: { fontSize: 16, color: c.textSecondary },
+    dateModalOverlay: {
+      flex: 1, justifyContent: 'flex-end', backgroundColor: c.overlay,
+    },
+    dateModalSheet: {
+      backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+      paddingBottom: 32,
+    },
+    dateModalHeader: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 20, paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.separator,
+    },
+    dateModalTitle: { fontSize: 16, fontWeight: '600', color: c.textPrimary },
+    dateModalCancel: { fontSize: 16, color: c.textSecondary },
+    dateModalDone: { fontSize: 16, fontWeight: '600', color: c.primary },
+    datePickerSpinner: { height: 220 },
+    separator: { height: StyleSheet.hairlineWidth, backgroundColor: c.separator, marginLeft: 16 },
+    tickerInputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+    tickerInput: { flex: 1 },
+    tickerSpinner: { marginLeft: 8 },
+    tickerPreview: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingHorizontal: 16, paddingBottom: 10,
+    },
+    tickerLogo: { width: 24, height: 24, borderRadius: 4, backgroundColor: c.surfaceHigh },
+    tickerPreviewName: { flex: 1, fontSize: 13, color: c.sectionHeader },
+    toggleRow: { flexDirection: 'row', padding: 8, gap: 8 },
+    toggleBtn: {
+      flex: 1, paddingVertical: 10, borderRadius: 8,
+      alignItems: 'center', backgroundColor: c.surfaceHigh,
+    },
+    toggleBtnBuy: { backgroundColor: c.profit },
+    toggleBtnShort: { backgroundColor: c.loss },
+    toggleText: { fontSize: 15, fontWeight: '600', color: c.textSecondary },
+    toggleTextActive: { color: '#FFFFFF' },
+    strategyValue: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
+    },
+    sublabel: {
+      fontSize: 13, fontWeight: '500', color: c.sectionHeader,
+      paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
+    },
+    chipRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
+    gradeBtn: {
+      width: 48, height: 48, borderRadius: 8,
+      alignItems: 'center', justifyContent: 'center', backgroundColor: c.surfaceHigh,
+    },
+    gradeBtnActive: { backgroundColor: c.primary },
+    gradeText: { fontSize: 17, fontWeight: '700', color: c.textSecondary },
+    gradeTextActive: { color: '#FFFFFF' },
+    emotionScroll: { paddingHorizontal: 12, paddingBottom: 12 },
+    emotionChip: {
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
+      backgroundColor: c.surfaceHigh, marginRight: 8,
+    },
+    emotionChipActive: { backgroundColor: c.purple },
+    emotionText: { fontSize: 14, fontWeight: '500', color: c.textSecondary },
+    emotionTextActive: { color: '#FFFFFF' },
+    textarea: { padding: 16, fontSize: 15, color: c.textPrimary, minHeight: 100 },
+    submitBtn: {
+      backgroundColor: c.primary, borderRadius: 12,
+      paddingVertical: 16, alignItems: 'center', marginTop: 24,
+    },
+    submitBtnDisabled: { opacity: 0.6 },
+    submitText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  });
+}

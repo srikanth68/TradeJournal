@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +27,7 @@ import {
 } from '../../src/services/positionService';
 import { db, schema } from '../../src/db';
 import { formatPrice, formatPnl, fromStoredPrice } from '../../src/utils/price';
+import { useTheme, type AppColors } from '../../src/theme';
 import type { Strategy } from '../../src/db/schema';
 
 const GRADE_COLORS: Record<string, string> = {
@@ -46,6 +48,8 @@ type AddEntryModalProps = {
 };
 
 function AddEntryModal({ visible, positionId, onDone, onClose }: AddEntryModalProps) {
+  const { colors } = useTheme();
+  const modalStyles = useMemo(() => makeModalStyles(colors), [colors]);
   const [price, setPrice] = useState('');
   const [qty, setQty] = useState('');
   const [commission, setCommission] = useState('');
@@ -124,6 +128,8 @@ type CloseModalProps = {
 };
 
 function ClosePositionModal({ visible, positionId, onDone, onClose }: CloseModalProps) {
+  const { colors } = useTheme();
+  const modalStyles = useMemo(() => makeModalStyles(colors), [colors]);
   const [exitPrice, setExitPrice] = useState('');
   const [commission, setCommission] = useState('');
   const [saving, setSaving] = useState(false);
@@ -197,6 +203,8 @@ type TradeGrade = 'A' | 'B' | 'C' | 'D';
 type EmotionTag = 'confident' | 'fomo' | 'hesitant' | 'revenge' | 'bored' | 'patient';
 
 function EditModal({ visible, position, onDone, onClose }: EditModalProps) {
+  const { colors } = useTheme();
+  const modalStyles = useMemo(() => makeModalStyles(colors), [colors]);
   const [setupNotes, setSetupNotes] = useState(position.setupNotes ?? '');
   const [notes, setNotes] = useState(position.notes ?? '');
   const [grade, setGrade] = useState<TradeGrade | undefined>(position.tradeGrade ?? undefined);
@@ -328,6 +336,8 @@ function ModalField({
   label: string; value: string; onChangeText: (t: string) => void;
   keyboardType?: 'default' | 'decimal-pad'; placeholder?: string; multiline?: boolean;
 }) {
+  const { colors } = useTheme();
+  const modalStyles = useMemo(() => makeModalStyles(colors), [colors]);
   return (
     <View style={multiline ? modalStyles.fieldMulti : modalStyles.field}>
       <Text style={modalStyles.fieldLabel}>{label}</Text>
@@ -337,7 +347,7 @@ function ModalField({
         onChangeText={onChangeText}
         keyboardType={keyboardType}
         placeholder={placeholder}
-        placeholderTextColor="#C7C7CC"
+        placeholderTextColor={colors.textTertiary}
         multiline={multiline}
         textAlignVertical={multiline ? 'top' : 'auto'}
       />
@@ -346,12 +356,16 @@ function ModalField({
 }
 
 function ModalSep() {
+  const { colors } = useTheme();
+  const modalStyles = useMemo(() => makeModalStyles(colors), [colors]);
   return <View style={modalStyles.sep} />;
 }
 
 // ─── Main Detail Screen ───────────────────────────────────────────────────────
 
 export default function PositionDetailScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [position, setPosition] = useState<PositionWithEntries | null>(null);
   const [strategy, setStrategy] = useState<Strategy | null>(null);
@@ -382,6 +396,40 @@ export default function PositionDetailScreen() {
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const handlePickScreenshot = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow access to your photo library to attach a chart screenshot.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.85,
+    });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    try {
+      await updatePosition(position!.id, { chartScreenshotUrl: uri });
+      load();
+    } catch (e) {
+      Alert.alert('Error', 'Could not save screenshot.');
+    }
+  };
+
+  const handleRemoveScreenshot = () => {
+    Alert.alert('Remove Screenshot', 'Remove the attached chart screenshot?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive',
+        onPress: async () => {
+          await updatePosition(position!.id, { chartScreenshotUrl: null });
+          load();
+        },
+      },
+    ]);
+  };
 
   const handleDelete = () => {
     Alert.alert(
@@ -625,6 +673,33 @@ export default function PositionDetailScreen() {
           </>
         )}
 
+        {/* Chart Screenshot */}
+        <Text style={styles.sectionHeader}>Chart Screenshot</Text>
+        {position.chartScreenshotUrl ? (
+          <View style={styles.screenshotCard}>
+            <Image
+              source={{ uri: position.chartScreenshotUrl }}
+              style={styles.screenshotImage}
+              resizeMode="contain"
+            />
+            <View style={styles.screenshotActions}>
+              <TouchableOpacity style={styles.screenshotReplaceBtn} onPress={handlePickScreenshot}>
+                <Ionicons name="refresh-outline" size={15} color={colors.primary} />
+                <Text style={styles.screenshotReplaceText}>Replace</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.screenshotRemoveBtn} onPress={handleRemoveScreenshot}>
+                <Ionicons name="trash-outline" size={15} color={colors.loss} />
+                <Text style={styles.screenshotRemoveText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.screenshotAddBtn} onPress={handlePickScreenshot}>
+            <Ionicons name="image-outline" size={22} color={colors.primary} />
+            <Text style={styles.screenshotAddText}>Attach Chart Screenshot</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Actions */}
         {isOpen && (
           <View style={styles.actionsRow}>
@@ -668,6 +743,8 @@ export default function PositionDetailScreen() {
 // ─── Shared Row Helpers ───────────────────────────────────────────────────────
 
 function DetailRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -677,172 +754,205 @@ function DetailRow({ label, value, valueColor }: { label: string; value: string;
 }
 
 function DetailSep() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return <View style={styles.sep} />;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  notFound: { fontSize: 16, color: '#8E8E93' },
-  navHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5EA',
-    minHeight: 52,
-  },
-  backBtn: { flexDirection: 'row', alignItems: 'center', padding: 8 },
-  backText: { fontSize: 17, color: '#007AFF' },
-  navActions: { flexDirection: 'row', gap: 4 },
-  iconBtn: { padding: 8 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
-  heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingTop: 0,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    marginTop: 16,
-    gap: 16,
-    overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07, shadowRadius: 8, elevation: 3,
-  },
-  heroAccent: { height: 5, marginHorizontal: -16, marginBottom: 0 },
-  heroAccentOpen: { backgroundColor: '#FF9500' },
-  heroAccentProfit: { backgroundColor: '#34C759' },
-  heroAccentLoss: { backgroundColor: '#FF3B30' },
-  heroTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: '#F2F2F7' },
-  logoPlaceholder: {
-    width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-  },
-  logoBuy: { backgroundColor: '#007AFF' },
-  logoShort: { backgroundColor: '#FF3B30' },
-  logoPlaceholderText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-  heroTicker: { fontSize: 22, fontWeight: '800', color: '#1C1C1E' },
-  heroCompany: { fontSize: 13, color: '#8E8E93', marginTop: 2 },
-  heroBadges: { flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' },
-  badge: { backgroundColor: '#E5F1FF', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
-  badgeShort: { backgroundColor: '#FFE5E5' },
-  badgeText: { fontSize: 11, fontWeight: '700', color: '#007AFF' },
-  statusBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
-  statusOpen: { backgroundColor: '#FFF3E0' },
-  statusClosed: { backgroundColor: '#E8F5E9' },
-  statusText: { fontSize: 11, fontWeight: '700', color: '#FF9500' },
-  pnlRow: { flexDirection: 'row', gap: 16 },
-  pnlBlock: { flex: 1 },
-  pnlLabel: { fontSize: 10, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: 0, marginBottom: 4 },
-  pnlValue: { fontSize: 17, fontWeight: '800' },
-  pnlPos: { color: '#34C759' },
-  pnlNeg: { color: '#FF3B30' },
-  pnlNeutral: { fontSize: 17, fontWeight: '600', color: '#1C1C1E' },
-  pnlOpenValue: { fontSize: 17, fontWeight: '600', color: '#FF9500' },
-  sectionHeader: {
-    fontSize: 13, fontWeight: '600', color: '#6D6D72',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 20, marginBottom: 8, marginLeft: 4,
-  },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden' },
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E5EA', marginLeft: 16 },
-  detailRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-  },
-  detailLabel: { fontSize: 15, color: '#8E8E93' },
-  detailValue: { fontSize: 15, fontWeight: '500', color: '#1C1C1E' },
-  entryRow: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12,
-  },
-  entryIndex: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center',
-  },
-  entryIndexText: { fontSize: 13, fontWeight: '700', color: '#6D6D72' },
-  entryInfo: { flex: 1 },
-  entryPrice: { fontSize: 15, fontWeight: '600', color: '#1C1C1E' },
-  entrySub: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
-  entryNote: { fontSize: 12, color: '#6D6D72', marginTop: 3, fontStyle: 'italic' },
-  entryCommission: { fontSize: 12, color: '#FF9500' },
-  notesSection: { padding: 16 },
-  notesLabel: { fontSize: 12, fontWeight: '600', color: '#8E8E93', textTransform: 'uppercase', marginBottom: 6 },
-  notesText: { fontSize: 15, color: '#1C1C1E', lineHeight: 22 },
-  actionsRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
-  addEntryBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 14, borderRadius: 12,
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#007AFF',
-  },
-  addEntryText: { fontSize: 16, fontWeight: '600', color: '#007AFF' },
-  closePositionBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 14, borderRadius: 12, backgroundColor: '#FF3B30',
-  },
-  closePositionText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    notFound: { fontSize: 16, color: c.textSecondary },
+    navHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 8,
+      paddingVertical: 10,
+      backgroundColor: c.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+      minHeight: 52,
+    },
+    backBtn: { flexDirection: 'row', alignItems: 'center', padding: 8 },
+    backText: { fontSize: 17, color: c.primary },
+    navActions: { flexDirection: 'row', gap: 4 },
+    iconBtn: { padding: 8 },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
+    heroCard: {
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      paddingTop: 0,
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      marginTop: 16,
+      gap: 16,
+      overflow: 'hidden',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.07, shadowRadius: 8, elevation: 3,
+    },
+    heroAccent: { height: 5, marginHorizontal: -16, marginBottom: 0 },
+    heroAccentOpen: { backgroundColor: c.open },
+    heroAccentProfit: { backgroundColor: c.profit },
+    heroAccentLoss: { backgroundColor: c.loss },
+    heroTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: c.surfaceHigh },
+    logoPlaceholder: {
+      width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    },
+    logoBuy: { backgroundColor: c.primary },
+    logoShort: { backgroundColor: c.loss },
+    logoPlaceholderText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+    heroTicker: { fontSize: 22, fontWeight: '800', color: c.textPrimary },
+    heroCompany: { fontSize: 13, color: c.textSecondary, marginTop: 2 },
+    heroBadges: { flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' },
+    badge: { backgroundColor: c.longBadgeBg, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
+    badgeShort: { backgroundColor: c.shortBadgeBg },
+    badgeText: { fontSize: 11, fontWeight: '700', color: c.primary },
+    statusBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
+    statusOpen: { backgroundColor: c.openBadgeBg },
+    statusClosed: { backgroundColor: c.closedBadgeBg },
+    statusText: { fontSize: 11, fontWeight: '700', color: c.open },
+    pnlRow: { flexDirection: 'row', gap: 16 },
+    pnlBlock: { flex: 1 },
+    pnlLabel: { fontSize: 10, color: c.textSecondary, textTransform: 'uppercase', letterSpacing: 0, marginBottom: 4 },
+    pnlValue: { fontSize: 17, fontWeight: '800' },
+    pnlPos: { color: c.profit },
+    pnlNeg: { color: c.loss },
+    pnlNeutral: { fontSize: 17, fontWeight: '600', color: c.textPrimary },
+    pnlOpenValue: { fontSize: 17, fontWeight: '600', color: c.open },
+    sectionHeader: {
+      fontSize: 13, fontWeight: '600', color: c.sectionHeader,
+      textTransform: 'uppercase', letterSpacing: 0.5,
+      marginTop: 20, marginBottom: 8, marginLeft: 4,
+    },
+    card: { backgroundColor: c.surface, borderRadius: 12, overflow: 'hidden' },
+    sep: { height: StyleSheet.hairlineWidth, backgroundColor: c.separator, marginLeft: 16 },
+    detailRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: 16, paddingVertical: 12,
+    },
+    detailLabel: { fontSize: 15, color: c.textSecondary },
+    detailValue: { fontSize: 15, fontWeight: '500', color: c.textPrimary },
+    entryRow: {
+      flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12,
+    },
+    entryIndex: {
+      width: 28, height: 28, borderRadius: 14,
+      backgroundColor: c.surfaceHigh, alignItems: 'center', justifyContent: 'center',
+    },
+    entryIndexText: { fontSize: 13, fontWeight: '700', color: c.sectionHeader },
+    entryInfo: { flex: 1 },
+    entryPrice: { fontSize: 15, fontWeight: '600', color: c.textPrimary },
+    entrySub: { fontSize: 12, color: c.textSecondary, marginTop: 2 },
+    entryNote: { fontSize: 12, color: c.sectionHeader, marginTop: 3, fontStyle: 'italic' },
+    entryCommission: { fontSize: 12, color: c.open },
+    notesSection: { padding: 16 },
+    notesLabel: { fontSize: 12, fontWeight: '600', color: c.textSecondary, textTransform: 'uppercase', marginBottom: 6 },
+    notesText: { fontSize: 15, color: c.textPrimary, lineHeight: 22 },
+    screenshotCard: {
+      backgroundColor: c.surface, borderRadius: 12, overflow: 'hidden', marginBottom: 0,
+    },
+    screenshotImage: {
+      width: '100%', height: 220, backgroundColor: c.surfaceHigh,
+    },
+    screenshotActions: {
+      flexDirection: 'row', gap: 0,
+      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator,
+    },
+    screenshotReplaceBtn: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 6, paddingVertical: 12,
+      borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: c.separator,
+    },
+    screenshotReplaceText: { fontSize: 14, fontWeight: '600', color: c.primary },
+    screenshotRemoveBtn: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 6, paddingVertical: 12,
+    },
+    screenshotRemoveText: { fontSize: 14, fontWeight: '600', color: c.loss },
+    screenshotAddBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+      backgroundColor: c.surface, borderRadius: 12, paddingVertical: 18,
+      borderWidth: 1, borderColor: c.primary, borderStyle: 'dashed',
+    },
+    screenshotAddText: { fontSize: 15, fontWeight: '600', color: c.primary },
+    actionsRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
+    addEntryBtn: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+      paddingVertical: 14, borderRadius: 12,
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.primary,
+    },
+    addEntryText: { fontSize: 16, fontWeight: '600', color: c.primary },
+    closePositionBtn: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+      paddingVertical: 14, borderRadius: 12, backgroundColor: c.loss,
+    },
+    closePositionText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  });
+}
 
-const modalStyles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E5EA',
-  },
-  title: { fontSize: 17, fontWeight: '600', color: '#1C1C1E' },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 8 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E5EA', marginLeft: 16 },
-  field: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  fieldMulti: { paddingHorizontal: 16, paddingVertical: 12 },
-  fieldLabel: { width: 120, fontSize: 15, color: '#1C1C1E' },
-  fieldInput: { flex: 1, fontSize: 15, color: '#1C1C1E', textAlign: 'right' },
-  fieldInputMulti: { textAlign: 'left', minHeight: 60, marginTop: 6 },
-  hint: { fontSize: 13, color: '#8E8E93', paddingHorizontal: 4, lineHeight: 18 },
-  sectionHeader: {
-    fontSize: 13, fontWeight: '600', color: '#6D6D72',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 16, marginBottom: 8, marginLeft: 4,
-  },
-  chipRow: { flexDirection: 'row', padding: 12, gap: 8 },
-  gradeBtn: {
-    width: 52, height: 44, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F2F7',
-  },
-  gradeText: { fontSize: 17, fontWeight: '700', color: '#8E8E93' },
-  gradeTextActive: { color: '#FFFFFF' },
-  emotionScroll: { paddingHorizontal: 12, paddingBottom: 12 },
-  emotionChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
-    backgroundColor: '#F2F2F7', marginRight: 8,
-  },
-  emotionChipActive: { backgroundColor: '#5856D6' },
-  emotionText: { fontSize: 14, fontWeight: '500', color: '#8E8E93' },
-  emotionTextActive: { color: '#FFFFFF' },
-  textarea: { padding: 16, fontSize: 15, color: '#1C1C1E', minHeight: 100 },
-  footer: { padding: 16 },
-  saveBtn: {
-    backgroundColor: '#007AFF', borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center',
-  },
-  closeBtn: {
-    backgroundColor: '#FF3B30', borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center',
-  },
-  saveBtnText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
-  disabled: { opacity: 0.6 },
-});
+function makeModalStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    container: { flex: 1, backgroundColor: c.background },
+    header: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 16, paddingVertical: 12,
+      backgroundColor: c.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+    },
+    title: { fontSize: 17, fontWeight: '600', color: c.textPrimary },
+    scroll: { flex: 1 },
+    scrollContent: { padding: 16, paddingBottom: 8 },
+    card: { backgroundColor: c.surface, borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+    sep: { height: StyleSheet.hairlineWidth, backgroundColor: c.separator, marginLeft: 16 },
+    field: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+    fieldMulti: { paddingHorizontal: 16, paddingVertical: 12 },
+    fieldLabel: { width: 120, fontSize: 15, color: c.textPrimary },
+    fieldInput: { flex: 1, fontSize: 15, color: c.textPrimary, textAlign: 'right' },
+    fieldInputMulti: { textAlign: 'left', minHeight: 60, marginTop: 6 },
+    hint: { fontSize: 13, color: c.textSecondary, paddingHorizontal: 4, lineHeight: 18 },
+    sectionHeader: {
+      fontSize: 13, fontWeight: '600', color: c.sectionHeader,
+      textTransform: 'uppercase', letterSpacing: 0.5,
+      marginTop: 16, marginBottom: 8, marginLeft: 4,
+    },
+    chipRow: { flexDirection: 'row', padding: 12, gap: 8 },
+    gradeBtn: {
+      width: 52, height: 44, borderRadius: 8,
+      alignItems: 'center', justifyContent: 'center', backgroundColor: c.surfaceHigh,
+    },
+    gradeText: { fontSize: 17, fontWeight: '700', color: c.textSecondary },
+    gradeTextActive: { color: '#FFFFFF' },
+    emotionScroll: { paddingHorizontal: 12, paddingBottom: 12 },
+    emotionChip: {
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
+      backgroundColor: c.surfaceHigh, marginRight: 8,
+    },
+    emotionChipActive: { backgroundColor: c.purple },
+    emotionText: { fontSize: 14, fontWeight: '500', color: c.textSecondary },
+    emotionTextActive: { color: '#FFFFFF' },
+    textarea: { padding: 16, fontSize: 15, color: c.textPrimary, minHeight: 100 },
+    footer: { padding: 16 },
+    saveBtn: {
+      backgroundColor: c.primary, borderRadius: 12,
+      paddingVertical: 16, alignItems: 'center',
+    },
+    closeBtn: {
+      backgroundColor: c.loss, borderRadius: 12,
+      paddingVertical: 16, alignItems: 'center',
+    },
+    saveBtnText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+    disabled: { opacity: 0.6 },
+  });
+}
