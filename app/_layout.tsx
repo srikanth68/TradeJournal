@@ -1,30 +1,13 @@
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { Stack, router, useSegments } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 import { runMigrations } from '../src/db';
 import { seedStrategies, seedDemoTrades } from '../src/db/seed';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 
-function AuthGuard({ dbReady }: { dbReady: boolean }) {
-  const { user, loading } = useAuth();
-  const segments = useSegments();
-
-  useEffect(() => {
-    if (!dbReady || loading) return;
-    const inAuthFlow = segments[0] === 'login' || (segments[0] as string) === 'auth';
-    if (!user && !inAuthFlow) {
-      router.replace('/login');
-    } else if (user && inAuthFlow) {
-      router.replace('/(tabs)');
-    }
-  }, [user, loading, segments, dbReady]);
-
-  return null;
-}
-
-function RootLayoutInner() {
+function RootNavigator() {
+  const { user, isLoaded } = useAuth();
   const [dbReady, setDbReady] = useState(false);
   const { loading: authLoading } = useAuth();
   const scheme = useColorScheme();
@@ -38,19 +21,24 @@ function RootLayoutInner() {
     })();
   }, []);
 
-  if (!dbReady || authLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: scheme === 'dark' ? '#000000' : '#F2F2F7' }}>
-        <ActivityIndicator size="large" color="#0A84FF" />
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (!isLoaded || !dbReady) return;
+
+    if (user) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/login');
+    }
+  }, [isLoaded, dbReady, user]);
+
+  if (!isLoaded || !dbReady) return null;
 
   return (
     <>
       <StatusBar style="auto" />
       <AuthGuard dbReady={dbReady} />
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="auth/callback" />
@@ -63,7 +51,7 @@ function RootLayoutInner() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootLayoutInner />
+      <RootNavigator />
     </AuthProvider>
   );
 }

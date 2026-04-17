@@ -1,219 +1,147 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { Alert } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
-import * as WebBrowser from 'expo-web-browser';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { makeRedirectUri } from 'expo-auth-session';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { generateUUID } from '../utils/uuid';
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 
-WebBrowser.maybeCompleteAuthSession();
+// ─────────────────────────────────────────────────────────────────────────────
+// Google Sign-In configuration
+//
+// To obtain a webClientId:
+//   1. Go to https://console.cloud.google.com
+//   2. Select (or create) your project
+//   3. APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID
+//   4. Application type: "Web application" — copy the Client ID
+//   5. Also create an "iOS" client ID and note the reversed client ID for app.json
+//   6. Replace the placeholder below with your actual Web Client ID
+// ─────────────────────────────────────────────────────────────────────────────
+const GOOGLE_WEB_CLIENT_ID =
+  'REPLACE_WITH_YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
 
-const GUEST_USER_KEY = 'guest_user_id';
-const GUEST_NAME_KEY = 'guest_display_name';
+GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
 
-export type AuthUser = {
-  id: string;
-  email?: string;
-  name?: string;
-  avatarUrl?: string;
-  isGuest: boolean;
-};
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-type AuthState = {
+export type AuthProvider = 'apple' | 'google' | 'guest';
+
+export interface AuthUser {
+  userId: string;
+  email: string | null;
+  name: string | null;
+  provider: AuthProvider;
+}
+
+interface AuthContextValue {
   user: AuthUser | null;
-  loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  isLoaded: boolean;
   signInWithApple: () => Promise<void>;
-  signInWithEmail: (email: string, password: string, isSignUp: boolean) => Promise<void>;
-  sendPhoneOtp: (phone: string) => Promise<void>;
-  verifyPhoneOtp: (phone: string, token: string) => Promise<void>;
-  continueAsGuest: (name?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  continueAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
-};
+}
 
-const AuthContext = createContext<AuthState | null>(null);
+// ─── Storage key ─────────────────────────────────────────────────────────────
 
-export function useAuth() {
+const STORAGE_KEY = '@auth_identity';
+
+// ─── Context ─────────────────────────────────────────────────────────────────
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 }
 
-function sessionToUser(session: Session): AuthUser {
-  const u = session.user;
-  return {
-    id: u.id,
-    email: u.email ?? undefined,
-    name:
-      u.user_metadata?.full_name ??
-      u.user_metadata?.name ??
-      u.email?.split('@')[0],
-    avatarUrl:
-      u.user_metadata?.avatar_url ??
-      u.user_metadata?.picture ??
-      undefined,
-    isGuest: false,
-  };
-}
+// ─── Provider ────────────────────────────────────────────────────────────────
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  // Bootstrap: check for existing session or guest user
+  // Restore identity from storage on boot
   useEffect(() => {
-    (async () => {
-      try {
-        if (isSupabaseConfigured) {
-          const { data } = await supabase.auth.getSession();
-          if (data.session) {
-            setUser(sessionToUser(data.session));
-            setLoading(false);
-            return;
-          }
-        }
-        // Check guest mode
-        const guestId = await SecureStore.getItemAsync(GUEST_USER_KEY);
-        if (guestId) {
-          const guestName = await SecureStore.getItemAsync(GUEST_NAME_KEY);
-          setUser({ id: guestId, name: guestName ?? 'Trader', isGuest: true });
-        }
-      } catch (e) {
-        console.warn('Auth bootstrap error:', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-
-    if (isSupabaseConfigured) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session) setUser(sessionToUser(session));
-        else setUser(null);
-      });
-      return () => subscription.unsubscribe();
-    }
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (raw) setUser(JSON.parse(raw));
+      })
+      .finally(() => setIsLoaded(true));
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      Alert.alert('Setup Required', 'Add your Supabase credentials to .env to enable Google Sign-In.');
-      return;
-    }
-    const redirectUrl = makeRedirectUri({ scheme: 'tradejournal', path: 'auth/callback' });
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
+  async function persist(u: AuthUser) {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+    setUser(u);
+  }
+
+  // ── Sign in with Apple ──────────────────────────────────────────────────────
+  async function signInWithApple() {
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
     });
-    if (error || !data.url) {
-      Alert.alert('Error', error?.message ?? 'Could not start Google sign-in.');
-      return;
-    }
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-    if (result.type === 'success') {
-      const url = new URL(result.url);
-      const code = url.searchParams.get('code');
-      if (code) await supabase.auth.exchangeCodeForSession(code);
-    }
-  }, []);
 
-  const signInWithApple = useCallback(async () => {
-    try {
-      const available = await AppleAuthentication.isAvailableAsync();
-      if (!available) {
-        Alert.alert('Not Available', 'Apple Sign In is only available on iOS devices.');
-        return;
+    const firstName = credential.fullName?.givenName ?? null;
+    const lastName = credential.fullName?.familyName ?? null;
+    const name =
+      firstName || lastName
+        ? [firstName, lastName].filter(Boolean).join(' ')
+        : null;
+
+    await persist({
+      userId: `apple:${credential.user}`,
+      email: credential.email ?? null,
+      // Apple only returns the name on first sign-in; preserve previously stored name
+      name: name ?? (user?.provider === 'apple' ? user.name : null),
+      provider: 'apple',
+    });
+  }
+
+  // ── Sign in with Google ─────────────────────────────────────────────────────
+  async function signInWithGoogle() {
+    await GoogleSignin.hasPlayServices();
+    const response = await GoogleSignin.signIn();
+
+    // response.data is present for successful sign-ins (SDK v13+)
+    const info = response.data?.user ?? (response as any).user;
+    await persist({
+      userId: `google:${info.id}`,
+      email: info.email ?? null,
+      name: info.name ?? null,
+      provider: 'google',
+    });
+  }
+
+  // ── Continue without account ────────────────────────────────────────────────
+  async function continueAsGuest() {
+    await persist({
+      userId: 'guest',
+      email: null,
+      name: null,
+      provider: 'guest',
+    });
+  }
+
+  // ── Sign out — clears identity only, trade data is untouched ───────────────
+  async function signOut() {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    if (user?.provider === 'google') {
+      try {
+        await GoogleSignin.signOut();
+      } catch {
+        // best-effort
       }
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-      if (!credential.identityToken) throw new Error('No identity token from Apple');
-
-      if (isSupabaseConfigured) {
-        const { error } = await supabase.auth.signInWithIdToken({
-          provider: 'apple',
-          token: credential.identityToken,
-        });
-        if (error) throw error;
-      } else {
-        // Fallback: use Apple credential locally
-        const name = [credential.fullName?.givenName, credential.fullName?.familyName]
-          .filter(Boolean).join(' ') || 'Trader';
-        await continueAsGuest(name);
-      }
-    } catch (e: any) {
-      if (e?.code !== 'ERR_REQUEST_CANCELED') {
-        Alert.alert('Apple Sign In Error', e?.message ?? 'Something went wrong.');
-      }
     }
-  }, []);
-
-  const signInWithEmail = useCallback(async (email: string, password: string, isSignUp: boolean) => {
-    if (!isSupabaseConfigured) {
-      // Local-only mode: derive a deterministic UUID from email and treat as guest
-      // Sanitize email to a valid SecureStore key (alphanumeric + . - _)
-      const emailKey = `local_user_${email.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const localId = await SecureStore.getItemAsync(emailKey) ?? generateUUID();
-      await SecureStore.setItemAsync(emailKey, localId);
-      await SecureStore.setItemAsync(GUEST_USER_KEY, localId);
-      await SecureStore.setItemAsync(GUEST_NAME_KEY, email.split('@')[0]);
-      setUser({ id: localId, email, name: email.split('@')[0], isGuest: false });
-      return;
-    }
-    const fn = isSignUp
-      ? () => supabase.auth.signUp({ email, password })
-      : () => supabase.auth.signInWithPassword({ email, password });
-    const { error } = await fn();
-    if (error) throw error;
-    if (isSignUp) {
-      Alert.alert('Check your email', 'A confirmation link has been sent to your inbox.');
-    }
-  }, []);
-
-  const sendPhoneOtp = useCallback(async (phone: string) => {
-    if (!isSupabaseConfigured) {
-      Alert.alert('Setup Required', 'Phone auth requires a Supabase project with SMS enabled.');
-      throw new Error('Supabase not configured');
-    }
-    const { error } = await supabase.auth.signInWithOtp({ phone });
-    if (error) throw error;
-  }, []);
-
-  const verifyPhoneOtp = useCallback(async (phone: string, token: string) => {
-    const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
-    if (error) throw error;
-  }, []);
-
-  const continueAsGuest = useCallback(async (name?: string) => {
-    let guestId = await SecureStore.getItemAsync(GUEST_USER_KEY);
-    if (!guestId) {
-      guestId = generateUUID();
-      await SecureStore.setItemAsync(GUEST_USER_KEY, guestId);
-    }
-    const displayName = name ?? 'Trader';
-    await SecureStore.setItemAsync(GUEST_NAME_KEY, displayName);
-    setUser({ id: guestId, name: displayName, isGuest: true });
-  }, []);
-
-  const signOut = useCallback(async () => {
-    if (isSupabaseConfigured) await supabase.auth.signOut();
-    await SecureStore.deleteItemAsync(GUEST_USER_KEY);
-    await SecureStore.deleteItemAsync(GUEST_NAME_KEY);
     setUser(null);
-  }, []);
+  }
 
   return (
     <AuthContext.Provider
-      value={{
-        user, loading,
-        signInWithGoogle, signInWithApple,
-        signInWithEmail, sendPhoneOtp, verifyPhoneOtp,
-        continueAsGuest, signOut,
-      }}
+      value={{ user, isLoaded, signInWithApple, signInWithGoogle, continueAsGuest, signOut }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,12 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { Tabs, usePathname, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  PanResponder, View, Text, TouchableOpacity,
-  StyleSheet, Modal, Alert, Image,
-} from 'react-native';
-import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
+import { PanResponder, View, TouchableOpacity, Alert } from 'react-native';
 import { useTheme } from '../../src/theme';
 import { useAuth } from '../../src/context/AuthContext';
 
@@ -81,8 +76,17 @@ export default function TabLayout() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
   const currentIdxRef = useRef(0);
   const [profileVisible, setProfileVisible] = useState(false);
+
+  function handleAccountPress() {
+    const title = user?.name ?? user?.email ?? (user?.provider === 'guest' ? 'Guest' : 'Account');
+    Alert.alert(title, user?.email ?? undefined, [
+      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
 
   useEffect(() => {
     const idx = TAB_ORDER.indexOf(pathname);
@@ -131,12 +135,66 @@ export default function TabLayout() {
           },
         }}
       >
-        <Tabs.Screen name="index"    options={{ title: 'Dashboard' }} />
-        <Tabs.Screen name="trades"   options={{ title: 'Trades' }} />
-        <Tabs.Screen name="add"      options={{ title: 'New Trade' }} />
-        <Tabs.Screen name="calendar" options={{ title: 'Calendar' }} />
-        <Tabs.Screen name="journal"  options={{ title: 'Journal' }} />
-        <Tabs.Screen name="coach"    options={{ title: 'AI Coach' }} />
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Dashboard',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="bar-chart" size={size} color={color} />
+            ),
+            headerShown: true,
+            headerRight: () => (
+              <TouchableOpacity onPress={handleAccountPress} style={{ marginRight: 16 }}>
+                <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="trades"
+          options={{
+            title: 'Trades',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="list" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="add"
+          options={{
+            title: 'Add Trade',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="add-circle" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="calendar"
+          options={{
+            title: 'Calendar',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="journal"
+          options={{
+            title: 'Journal',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="book-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="coach"
+          options={{
+            title: 'Coach',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="sparkles-outline" size={size} color={color} />
+            ),
+          }}
+        />
       </Tabs>
     </View>
   );
