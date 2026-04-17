@@ -53,6 +53,16 @@ export async function runMigrations() {
       updated_at INTEGER NOT NULL,
       deleted_at INTEGER
     );
+    CREATE TABLE IF NOT EXISTS daily_journals (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL UNIQUE,
+      market_notes TEXT,
+      mindset_notes TEXT,
+      lessons TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      deleted_at INTEGER
+    );
     CREATE TABLE IF NOT EXISTS position_entries (
       id TEXT PRIMARY KEY,
       position_id TEXT NOT NULL REFERENCES positions(id),

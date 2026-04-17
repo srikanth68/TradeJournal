@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,16 +12,26 @@ import {
   Platform,
   Image,
   Modal,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useTheme, type AppColors } from '../../src/theme';
 import { db, schema } from '../../src/db';
 import { createPosition } from '../../src/services/positionService';
 import { lookupTicker } from '../../src/services/tickerService';
 import { StrategyPickerModal } from '../../src/components/StrategyPickerModal';
 import type { Strategy } from '../../src/db/schema';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const RISK_PRESETS = [0.5, 1, 2, 3];
 
 type TradeType = 'buy' | 'short';
 type TradeGrade = 'A' | 'B' | 'C' | 'D';
@@ -33,6 +43,8 @@ const EMOTION_LABELS: Record<EmotionTag, string> = {
 };
 
 export default function AddTradeScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [ticker, setTicker] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
@@ -52,6 +64,26 @@ export default function AddTradeScreen() {
   const [stopLoss, setStopLoss] = useState('');
   const [targetPrice, setTargetPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Risk Calculator ──
+  const [showRiskCalc, setShowRiskCalc] = useState(false);
+  const [accountEquity, setAccountEquity] = useState('');
+  const [riskPct, setRiskPct] = useState(1);
+
+  const riskCalc = useMemo(() => {
+    const equity = parseFloat(accountEquity);
+    const entry = parseFloat(entryPrice);
+    const sl = parseFloat(stopLoss);
+    if (!equity || equity <= 0 || !entry || entry <= 0) return null;
+    const maxRiskDollars = equity * (riskPct / 100);
+    const slDistance = sl > 0 ? Math.abs(entry - sl) : null;
+    const suggestedShares = slDistance && slDistance > 0 ? maxRiskDollars / slDistance : null;
+    const positionSize = suggestedShares ? suggestedShares * entry : null;
+    const rr = sl > 0 && parseFloat(targetPrice) > 0
+      ? Math.abs(parseFloat(targetPrice) - entry) / Math.abs(entry - sl)
+      : null;
+    return { maxRiskDollars, suggestedShares, positionSize, rr };
+  }, [accountEquity, riskPct, entryPrice, stopLoss, targetPrice]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -155,6 +187,7 @@ export default function AddTradeScreen() {
                 <TextInput
                   style={[styles.input, styles.tickerInput]}
                   placeholder="AAPL"
+                  placeholderTextColor={colors.textTertiary}
                   value={ticker}
                   onChangeText={t => setTicker(t.toUpperCase())}
                   autoCapitalize="characters"
@@ -188,6 +221,7 @@ export default function AddTradeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Optional"
+                placeholderTextColor={colors.textTertiary}
                 value={companyName}
                 onChangeText={setCompanyName}
               />
@@ -220,12 +254,12 @@ export default function AddTradeScreen() {
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Entry Price</Text>
-              <TextInput style={styles.input} placeholder="0.00" value={entryPrice} onChangeText={setEntryPrice} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="0.00" placeholderTextColor={colors.textTertiary} value={entryPrice} onChangeText={setEntryPrice} keyboardType="decimal-pad" />
             </View>
             <View style={styles.separator} />
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Quantity</Text>
-              <TextInput style={styles.input} placeholder="0" value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="0" placeholderTextColor={colors.textTertiary} value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" />
             </View>
             <View style={styles.separator} />
             <TouchableOpacity
@@ -251,14 +285,123 @@ export default function AddTradeScreen() {
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Stop Loss</Text>
-              <TextInput style={styles.input} placeholder="Optional" value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={colors.textTertiary} value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" />
             </View>
             <View style={styles.separator} />
             <View style={styles.fieldRow}>
               <Text style={styles.label}>Target Price</Text>
-              <TextInput style={styles.input} placeholder="Optional" value={targetPrice} onChangeText={setTargetPrice} keyboardType="decimal-pad" />
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={colors.textTertiary} value={targetPrice} onChangeText={setTargetPrice} keyboardType="decimal-pad" />
             </View>
           </View>
+
+          {/* ── Risk Calculator ── */}
+          <TouchableOpacity
+            style={styles.calcToggle}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setShowRiskCalc(v => !v);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.calcToggleIcon, { backgroundColor: colors.primary + '18' }]}>
+              <Ionicons name="calculator-outline" size={17} color={colors.primary} />
+            </View>
+            <Text style={[styles.calcToggleLabel, { color: colors.textPrimary }]}>Position Size Calculator</Text>
+            <Ionicons name={showRiskCalc ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          {showRiskCalc && (
+            <View style={[styles.card, styles.calcCard]}>
+              {/* Account equity */}
+              <View style={styles.fieldRow}>
+                <Text style={styles.label}>Account Size</Text>
+                <View style={styles.calcInputRow}>
+                  <Text style={[styles.calcCurrency, { color: colors.textSecondary }]}>$</Text>
+                  <TextInput
+                    style={[styles.input, styles.calcInput]}
+                    placeholder="50,000"
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="decimal-pad"
+                    value={accountEquity}
+                    onChangeText={setAccountEquity}
+                  />
+                </View>
+              </View>
+              <View style={styles.separator} />
+
+              {/* Risk % presets */}
+              <View style={[styles.fieldRow, { alignItems: 'flex-start', flexDirection: 'column', gap: 8 }]}>
+                <Text style={[styles.sublabel, { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 }]}>Max Risk per Trade</Text>
+                <View style={styles.riskPresetRow}>
+                  {RISK_PRESETS.map(p => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[styles.riskPresetBtn, riskPct === p && { backgroundColor: colors.primary }]}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRiskPct(p); }}
+                    >
+                      <Text style={[styles.riskPresetText, { color: riskPct === p ? '#fff' : colors.textSecondary }]}>
+                        {p}%
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Results */}
+              {riskCalc ? (
+                <View style={[styles.calcResults, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
+                  <View style={styles.calcRow}>
+                    <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Max $ at risk</Text>
+                    <Text style={[styles.calcVal, { color: colors.loss }]}>
+                      ${riskCalc.maxRiskDollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  {riskCalc.suggestedShares != null && (
+                    <View style={styles.calcRow}>
+                      <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Suggested shares</Text>
+                      <Text style={[styles.calcVal, { color: colors.textPrimary }]}>
+                        {riskCalc.suggestedShares.toFixed(1)}
+                        <Text style={{ color: colors.textTertiary, fontSize: 12 }}> shares</Text>
+                      </Text>
+                    </View>
+                  )}
+                  {riskCalc.positionSize != null && (
+                    <View style={styles.calcRow}>
+                      <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Position size</Text>
+                      <Text style={[styles.calcVal, { color: colors.textPrimary }]}>
+                        ${riskCalc.positionSize.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      </Text>
+                    </View>
+                  )}
+                  {riskCalc.rr != null && (
+                    <View style={[styles.calcRow, { borderBottomWidth: 0 }]}>
+                      <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Risk / Reward</Text>
+                      <Text style={[styles.calcVal, { color: riskCalc.rr >= 2 ? colors.profit : riskCalc.rr >= 1 ? colors.open : colors.loss }]}>
+                        1 : {riskCalc.rr.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  {riskCalc.suggestedShares != null && (
+                    <TouchableOpacity
+                      style={[styles.applyBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '40' }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setQuantity(riskCalc.suggestedShares!.toFixed(1));
+                      }}
+                    >
+                      <Ionicons name="arrow-up-circle-outline" size={16} color={colors.primary} />
+                      <Text style={[styles.applyBtnText, { color: colors.primary }]}>Apply to Quantity</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <Text style={[styles.calcHint, { color: colors.textTertiary }]}>
+                  Enter account size, entry price, and stop loss to calculate position sizing.
+                </Text>
+              )}
+            </View>
+          )}
 
           <Text style={styles.sectionHeader}>Strategy</Text>
           <View style={styles.card}>
@@ -309,6 +452,7 @@ export default function AddTradeScreen() {
             <TextInput
               style={styles.textarea}
               placeholder="Describe your setup, thesis, or key levels..."
+              placeholderTextColor={colors.textTertiary}
               value={setupNotes}
               onChangeText={setSetupNotes}
               multiline
@@ -379,7 +523,7 @@ export default function AddTradeScreen() {
                   if (date) setTempDate(date);
                 }}
                 style={styles.datePickerSpinner}
-                textColor="#1C1C1E"
+                textColor={colors.textPrimary}
               />
             </View>
           </View>
@@ -389,94 +533,133 @@ export default function AddTradeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
-  sectionHeader: {
-    fontSize: 13, fontWeight: '600', color: '#6D6D72',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 20, marginBottom: 8, marginLeft: 4,
-  },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden' },
-  fieldRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12, minHeight: 48,
-  },
-  label: { fontSize: 16, color: '#1C1C1E', width: 110, flexShrink: 0 },
-  input: { flex: 1, fontSize: 16, color: '#1C1C1E', textAlign: 'right' },
-  placeholder: { color: '#C7C7CC' },
-  staticValue: { flex: 1, fontSize: 16, color: '#8E8E93', textAlign: 'right' },
-  dateValueRow: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'flex-end', gap: 6,
-  },
-  dateValue: { fontSize: 16, color: '#1C1C1E' },
-  dateValueTime: { fontSize: 16, color: '#8E8E93' },
-  dateModalOverlay: {
-    flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  dateModalSheet: {
-    backgroundColor: '#FFFFFF', borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    paddingBottom: 32,
-  },
-  dateModalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E5EA',
-  },
-  dateModalTitle: { fontSize: 16, fontWeight: '600', color: '#1C1C1E' },
-  dateModalCancel: { fontSize: 16, color: '#8E8E93' },
-  dateModalDone: { fontSize: 16, fontWeight: '600', color: '#007AFF' },
-  datePickerSpinner: { height: 220 },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E5EA', marginLeft: 16 },
-  tickerInputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
-  tickerInput: { flex: 1 },
-  tickerSpinner: { marginLeft: 8 },
-  tickerPreview: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingBottom: 10,
-  },
-  tickerLogo: { width: 24, height: 24, borderRadius: 4, backgroundColor: '#F2F2F7' },
-  tickerPreviewName: { flex: 1, fontSize: 13, color: '#6D6D72' },
-  toggleRow: { flexDirection: 'row', padding: 8, gap: 8 },
-  toggleBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 8,
-    alignItems: 'center', backgroundColor: '#F2F2F7',
-  },
-  toggleBtnBuy: { backgroundColor: '#34C759' },
-  toggleBtnShort: { backgroundColor: '#FF3B30' },
-  toggleText: { fontSize: 15, fontWeight: '600', color: '#8E8E93' },
-  toggleTextActive: { color: '#FFFFFF' },
-  strategyValue: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
-  },
-  sublabel: {
-    fontSize: 13, fontWeight: '500', color: '#6D6D72',
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
-  },
-  chipRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
-  gradeBtn: {
-    width: 48, height: 48, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F2F7',
-  },
-  gradeBtnActive: { backgroundColor: '#007AFF' },
-  gradeText: { fontSize: 17, fontWeight: '700', color: '#8E8E93' },
-  gradeTextActive: { color: '#FFFFFF' },
-  emotionScroll: { paddingHorizontal: 12, paddingBottom: 12 },
-  emotionChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
-    backgroundColor: '#F2F2F7', marginRight: 8,
-  },
-  emotionChipActive: { backgroundColor: '#5856D6' },
-  emotionText: { fontSize: 14, fontWeight: '500', color: '#8E8E93' },
-  emotionTextActive: { color: '#FFFFFF' },
-  textarea: { padding: 16, fontSize: 15, color: '#1C1C1E', minHeight: 100 },
-  submitBtn: {
-    backgroundColor: '#007AFF', borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center', marginTop: 24,
-  },
-  submitBtnDisabled: { opacity: 0.6 },
-  submitText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    container: { flex: 1, backgroundColor: c.background },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
+    sectionHeader: {
+      fontSize: 13, fontWeight: '600', color: c.sectionHeader,
+      textTransform: 'uppercase', letterSpacing: 0.5,
+      marginTop: 20, marginBottom: 8, marginLeft: 4,
+    },
+    card: { backgroundColor: c.surface, borderRadius: 12, overflow: 'hidden' },
+    fieldRow: {
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: 16, paddingVertical: 12, minHeight: 48,
+    },
+    label: { fontSize: 16, color: c.textPrimary, width: 110, flexShrink: 0 },
+    input: { flex: 1, fontSize: 16, color: c.textPrimary, textAlign: 'right' },
+    placeholder: { color: c.textTertiary },
+    staticValue: { flex: 1, fontSize: 16, color: c.textSecondary, textAlign: 'right' },
+    dateValueRow: {
+      flex: 1, flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'flex-end', gap: 6,
+    },
+    dateValue: { fontSize: 16, color: c.textPrimary },
+    dateValueTime: { fontSize: 16, color: c.textSecondary },
+    dateModalOverlay: {
+      flex: 1, justifyContent: 'flex-end', backgroundColor: c.overlay,
+    },
+    dateModalSheet: {
+      backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+      paddingBottom: 32,
+    },
+    dateModalHeader: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 20, paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.separator,
+    },
+    dateModalTitle: { fontSize: 16, fontWeight: '600', color: c.textPrimary },
+    dateModalCancel: { fontSize: 16, color: c.textSecondary },
+    dateModalDone: { fontSize: 16, fontWeight: '600', color: c.primary },
+    datePickerSpinner: { height: 220 },
+    separator: { height: StyleSheet.hairlineWidth, backgroundColor: c.separator, marginLeft: 16 },
+    tickerInputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+    tickerInput: { flex: 1 },
+    tickerSpinner: { marginLeft: 8 },
+    tickerPreview: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingHorizontal: 16, paddingBottom: 10,
+    },
+    tickerLogo: { width: 24, height: 24, borderRadius: 4, backgroundColor: c.surfaceHigh },
+    tickerPreviewName: { flex: 1, fontSize: 13, color: c.sectionHeader },
+    toggleRow: { flexDirection: 'row', padding: 8, gap: 8 },
+    toggleBtn: {
+      flex: 1, paddingVertical: 10, borderRadius: 8,
+      alignItems: 'center', backgroundColor: c.surfaceHigh,
+    },
+    toggleBtnBuy: { backgroundColor: c.profit },
+    toggleBtnShort: { backgroundColor: c.loss },
+    toggleText: { fontSize: 15, fontWeight: '600', color: c.textSecondary },
+    toggleTextActive: { color: '#FFFFFF' },
+    strategyValue: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
+    },
+    sublabel: {
+      fontSize: 13, fontWeight: '500', color: c.sectionHeader,
+      paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
+    },
+    chipRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
+    gradeBtn: {
+      width: 48, height: 48, borderRadius: 8,
+      alignItems: 'center', justifyContent: 'center', backgroundColor: c.surfaceHigh,
+    },
+    gradeBtnActive: { backgroundColor: c.primary },
+    gradeText: { fontSize: 17, fontWeight: '700', color: c.textSecondary },
+    gradeTextActive: { color: '#FFFFFF' },
+    emotionScroll: { paddingHorizontal: 12, paddingBottom: 12 },
+    emotionChip: {
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
+      backgroundColor: c.surfaceHigh, marginRight: 8,
+    },
+    emotionChipActive: { backgroundColor: c.purple },
+    emotionText: { fontSize: 14, fontWeight: '500', color: c.textSecondary },
+    emotionTextActive: { color: '#FFFFFF' },
+    textarea: { padding: 16, fontSize: 15, color: c.textPrimary, minHeight: 100 },
+    submitBtn: {
+      backgroundColor: c.primary, borderRadius: 12,
+      paddingVertical: 16, alignItems: 'center', marginTop: 24,
+    },
+    submitBtnDisabled: { opacity: 0.6 },
+    submitText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+
+    // ── Risk Calculator ──
+    calcToggle: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      paddingVertical: 10, paddingHorizontal: 4, marginTop: 16,
+    },
+    calcToggleIcon: {
+      width: 30, height: 30, borderRadius: 8,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    calcToggleLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
+    calcCard: { padding: 0, marginTop: 0 },
+    calcInputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+    calcCurrency: { fontSize: 16, fontWeight: '500' },
+    calcInput: { textAlign: 'right' },
+    riskPresetRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+    riskPresetBtn: {
+      paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8,
+      backgroundColor: c.surfaceHigh,
+    },
+    riskPresetText: { fontSize: 14, fontWeight: '600' },
+    calcResults: {
+      margin: 12, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
+    },
+    calcRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: 14, paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+    },
+    calcKey: { fontSize: 13, fontWeight: '500' },
+    calcVal: { fontSize: 14, fontWeight: '700' },
+    applyBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 6, paddingVertical: 10, margin: 10, borderRadius: 8, borderWidth: 1,
+    },
+    applyBtnText: { fontSize: 14, fontWeight: '600' },
+    calcHint: { fontSize: 13, textAlign: 'center', padding: 16, lineHeight: 19 },
+  });
+}

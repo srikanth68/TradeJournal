@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme, type AppColors } from '../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db, schema } from '../db';
 import type { Strategy } from '../db/schema';
@@ -34,6 +35,8 @@ export function StrategyPickerModal({
   onClose,
   onStrategiesChange,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [creatingCustom, setCreatingCustom] = useState(false);
   const [customName, setCustomName] = useState('');
@@ -121,6 +124,7 @@ export function StrategyPickerModal({
             <TextInput
               style={styles.searchInput}
               placeholder="Search strategies..."
+              placeholderTextColor={colors.textTertiary}
               value={query}
               onChangeText={setQuery}
               autoCorrect={false}
@@ -195,6 +199,7 @@ export function StrategyPickerModal({
                   <TextInput
                     style={styles.fieldInput}
                     placeholder="e.g. Opening Drive"
+                    placeholderTextColor={colors.textTertiary}
                     value={customName}
                     onChangeText={setCustomName}
                     autoFocus
@@ -242,204 +247,206 @@ export function StrategyPickerModal({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5EA',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    margin: 12,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E5E5EA',
-  },
-  searchIcon: {
-    marginRight: 6,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#1C1C1E',
-  },
-  listContent: {
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  noneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 10,
-    marginBottom: 4,
-  },
-  noneText: {
-    fontSize: 16,
-    color: '#8E8E93',
-    fontStyle: 'italic',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  rowSelected: {
-    backgroundColor: '#EBF5FF',
-  },
-  rowContent: {
-    flex: 1,
-  },
-  rowName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1C1C1E',
-    marginBottom: 2,
-  },
-  rowDesc: {
-    fontSize: 13,
-    color: '#8E8E93',
-  },
-  customBadge: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  customBadgeText: {
-    fontSize: 11,
-    color: '#8E8E93',
-    fontWeight: '500',
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E5EA',
-    marginLeft: 16,
-  },
-  emptyState: {
-    paddingVertical: 24,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#8E8E93',
-  },
-  createBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    margin: 12,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  createBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  createForm: {
-    flex: 1,
-    padding: 16,
-  },
-  createFormTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6D6D72',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  field: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  fieldInput: {
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  fieldInputMulti: {
-    minHeight: 48,
-  },
-  fieldSep: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E5EA',
-    marginLeft: 16,
-  },
-  createFormActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  cancelBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: '#007AFF',
-  },
-  saveBtnDisabled: {
-    opacity: 0.6,
-  },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: c.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
+    closeBtn: {
+      padding: 4,
+    },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      margin: 12,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+    },
+    searchIcon: {
+      marginRight: 6,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 15,
+      color: c.textPrimary,
+    },
+    listContent: {
+      paddingHorizontal: 12,
+      paddingBottom: 8,
+    },
+    noneRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: c.surface,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderRadius: 10,
+      marginBottom: 4,
+    },
+    noneText: {
+      fontSize: 16,
+      color: c.textSecondary,
+      fontStyle: 'italic',
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      gap: 10,
+    },
+    rowSelected: {
+      backgroundColor: c.selectedRowBg,
+    },
+    rowContent: {
+      flex: 1,
+    },
+    rowName: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: c.textPrimary,
+      marginBottom: 2,
+    },
+    rowDesc: {
+      fontSize: 13,
+      color: c.textSecondary,
+    },
+    customBadge: {
+      backgroundColor: c.surfaceHigh,
+      borderRadius: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    customBadgeText: {
+      fontSize: 11,
+      color: c.textSecondary,
+      fontWeight: '500',
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.separator,
+      marginLeft: 16,
+    },
+    emptyState: {
+      paddingVertical: 24,
+      alignItems: 'center',
+    },
+    emptyText: {
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    createBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      margin: 12,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.primary,
+    },
+    createBtnText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.primary,
+    },
+    createForm: {
+      flex: 1,
+      padding: 16,
+    },
+    createFormTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.sectionHeader,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 12,
+    },
+    card: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      overflow: 'hidden',
+    },
+    field: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    fieldLabel: {
+      fontSize: 12,
+      color: c.textSecondary,
+      fontWeight: '500',
+      marginBottom: 4,
+    },
+    fieldInput: {
+      fontSize: 16,
+      color: c.textPrimary,
+    },
+    fieldInputMulti: {
+      minHeight: 48,
+    },
+    fieldSep: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.separator,
+      marginLeft: 16,
+    },
+    createFormActions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 20,
+    },
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    cancelBtnText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
+    saveBtn: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+      backgroundColor: c.primary,
+    },
+    saveBtnDisabled: {
+      opacity: 0.6,
+    },
+    saveBtnText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+  });
+}

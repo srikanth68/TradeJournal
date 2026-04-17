@@ -176,6 +176,7 @@ type UpdatePositionData = {
   emotionTag?: 'confident' | 'fomo' | 'hesitant' | 'revenge' | 'bored' | 'patient' | null;
   targetPrice?: number | null;
   stopLossPrice?: number | null;
+  chartScreenshotUrl?: string | null;
 };
 
 export async function updatePosition(id: string, data: UpdatePositionData): Promise<void> {
@@ -188,6 +189,7 @@ export async function updatePosition(id: string, data: UpdatePositionData): Prom
       emotionTag: data.emotionTag ?? undefined,
       targetPrice: data.targetPrice != null ? toStoredPrice(data.targetPrice) : undefined,
       stopLossPrice: data.stopLossPrice != null ? toStoredPrice(data.stopLossPrice) : undefined,
+      chartScreenshotUrl: data.chartScreenshotUrl !== undefined ? data.chartScreenshotUrl : undefined,
       updatedAt: new Date(),
     })
     .where(eq(schema.positions.id, id));
