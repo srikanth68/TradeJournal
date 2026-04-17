@@ -1,8 +1,8 @@
-# TradeJournal
+# TradeEdge
 
 > *A mobile-first trade journal for traders who want to understand their edge — not just track their trades.*
 
-TradeJournal is a cross-platform iOS/Android app built with React Native and Expo. It starts as a clean, fast way to log trades manually, and grows into a personal trading analytics engine with AI-powered plan analysis.
+TradeEdge is a cross-platform iOS/Android app built with React Native and Expo. It starts as a clean, fast way to log trades manually, and grows into a personal trading analytics engine with AI-powered plan analysis.
 
 ---
 
@@ -19,7 +19,7 @@ TradeJournal is a cross-platform iOS/Android app built with React Native and Exp
 
 ## Why This Exists
 
-Most trading journals are either desktop-only, spreadsheet-based, or buried inside a brokerage app. None of them feel like something you'd actually reach for on your phone mid-session. TradeJournal is built mobile-first, works fully offline, and is designed to grow with the trader — from manual logging in week one, to AI-assisted trade planning, to a full web portal with automatic trade import from your brokerage.
+Most trading journals are either desktop-only, spreadsheet-based, or buried inside a brokerage app. None of them feel like something you'd actually reach for on your phone mid-session. TradeEdge is built mobile-first, works fully offline, and is designed to grow with the trader — from manual logging in week one, to AI-assisted trade planning, to a full web portal with automatic trade import from your brokerage.
 
 ---
 
@@ -101,8 +101,8 @@ Most trading journals are either desktop-only, spreadsheet-based, or buried insi
 # Prerequisites: Node.js 18+, Expo CLI, iOS Simulator (Xcode) or Android Emulator
 
 # Clone the repo
-git clone https://github.com/srikanth68/TradeJournal.git
-cd TradeJournal
+git clone https://github.com/srikanth68/TradeEdge.git
+cd TradeEdge
 
 # Install dependencies
 npm install
@@ -119,7 +119,7 @@ npx expo run:ios
 ## Project Structure
 
 ```
-TradeJournal/
+TradeEdge/
 ├── app/                        # Expo Router screens
 │   ├── (tabs)/
 │   │   ├── _layout.tsx         # Tab bar (Trades / Add Trade / Calendar / Journal)

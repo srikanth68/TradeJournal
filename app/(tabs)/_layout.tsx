@@ -39,19 +39,20 @@ export default function TabLayout() {
     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textSecondary,
+          tabBarActiveTintColor: '#C9A84C',
+          tabBarInactiveTintColor: '#9B9B9B',
           tabBarStyle: {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
+            backgroundColor: '#FFFFFF',
+            borderTopColor: '#E8E8E8',
+            borderTopWidth: 1,
           },
           headerStyle: {
-            backgroundColor: colors.surface,
+            backgroundColor: '#FFFFFF',
           },
           headerTitleStyle: {
             fontWeight: '600',
             fontSize: 17,
-            color: colors.textPrimary,
+            color: '#1A1A1A',
           },
         }}
       >
