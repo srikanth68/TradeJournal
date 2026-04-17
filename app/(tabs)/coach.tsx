@@ -15,12 +15,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { useTheme, type AppColors } from '../../src/theme';
 import { getPositions, type PositionWithEntries } from '../../src/services/positionService';
 import { streamCoachReply, type Message } from '../../src/services/coachService';
 
-const API_KEY_STORAGE = '@coach_api_key';
+const API_KEY_STORAGE = 'coach_api_key';
 
 const STARTERS = [
   'What patterns do you see in my losing trades?',
@@ -45,7 +45,7 @@ function ApiKeySetup({ onSave }: { onSave: (key: string) => void }) {
       return;
     }
     setSaving(true);
-    await AsyncStorage.setItem(API_KEY_STORAGE, trimmed);
+    await SecureStore.setItemAsync(API_KEY_STORAGE, trimmed);
     setSaving(false);
     onSave(trimmed);
   };
@@ -132,7 +132,7 @@ export default function CoachScreen() {
       let active = true;
       (async () => {
         const [savedKey, pos] = await Promise.all([
-          AsyncStorage.getItem(API_KEY_STORAGE),
+          SecureStore.getItemAsync(API_KEY_STORAGE),
           getPositions(),
         ]);
         if (!active) return;
@@ -196,7 +196,7 @@ export default function CoachScreen() {
       {
         text: 'Clear', style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.removeItem(API_KEY_STORAGE);
+          await SecureStore.deleteItemAsync(API_KEY_STORAGE);
           setApiKey(null);
           setMessages([]);
         },

@@ -12,10 +12,13 @@ import {
   Platform,
   Image,
   Modal,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useTheme, type AppColors } from '../../src/theme';
 import { db, schema } from '../../src/db';
@@ -23,6 +26,12 @@ import { createPosition } from '../../src/services/positionService';
 import { lookupTicker } from '../../src/services/tickerService';
 import { StrategyPickerModal } from '../../src/components/StrategyPickerModal';
 import type { Strategy } from '../../src/db/schema';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const RISK_PRESETS = [0.5, 1, 2, 3];
 
 type TradeType = 'buy' | 'short';
 type TradeGrade = 'A' | 'B' | 'C' | 'D';
@@ -55,6 +64,26 @@ export default function AddTradeScreen() {
   const [stopLoss, setStopLoss] = useState('');
   const [targetPrice, setTargetPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Risk Calculator ──
+  const [showRiskCalc, setShowRiskCalc] = useState(false);
+  const [accountEquity, setAccountEquity] = useState('');
+  const [riskPct, setRiskPct] = useState(1);
+
+  const riskCalc = useMemo(() => {
+    const equity = parseFloat(accountEquity);
+    const entry = parseFloat(entryPrice);
+    const sl = parseFloat(stopLoss);
+    if (!equity || equity <= 0 || !entry || entry <= 0) return null;
+    const maxRiskDollars = equity * (riskPct / 100);
+    const slDistance = sl > 0 ? Math.abs(entry - sl) : null;
+    const suggestedShares = slDistance && slDistance > 0 ? maxRiskDollars / slDistance : null;
+    const positionSize = suggestedShares ? suggestedShares * entry : null;
+    const rr = sl > 0 && parseFloat(targetPrice) > 0
+      ? Math.abs(parseFloat(targetPrice) - entry) / Math.abs(entry - sl)
+      : null;
+    return { maxRiskDollars, suggestedShares, positionSize, rr };
+  }, [accountEquity, riskPct, entryPrice, stopLoss, targetPrice]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -264,6 +293,115 @@ export default function AddTradeScreen() {
               <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={colors.textTertiary} value={targetPrice} onChangeText={setTargetPrice} keyboardType="decimal-pad" />
             </View>
           </View>
+
+          {/* ── Risk Calculator ── */}
+          <TouchableOpacity
+            style={styles.calcToggle}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setShowRiskCalc(v => !v);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.calcToggleIcon, { backgroundColor: colors.primary + '18' }]}>
+              <Ionicons name="calculator-outline" size={17} color={colors.primary} />
+            </View>
+            <Text style={[styles.calcToggleLabel, { color: colors.textPrimary }]}>Position Size Calculator</Text>
+            <Ionicons name={showRiskCalc ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          {showRiskCalc && (
+            <View style={[styles.card, styles.calcCard]}>
+              {/* Account equity */}
+              <View style={styles.fieldRow}>
+                <Text style={styles.label}>Account Size</Text>
+                <View style={styles.calcInputRow}>
+                  <Text style={[styles.calcCurrency, { color: colors.textSecondary }]}>$</Text>
+                  <TextInput
+                    style={[styles.input, styles.calcInput]}
+                    placeholder="50,000"
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="decimal-pad"
+                    value={accountEquity}
+                    onChangeText={setAccountEquity}
+                  />
+                </View>
+              </View>
+              <View style={styles.separator} />
+
+              {/* Risk % presets */}
+              <View style={[styles.fieldRow, { alignItems: 'flex-start', flexDirection: 'column', gap: 8 }]}>
+                <Text style={[styles.sublabel, { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 }]}>Max Risk per Trade</Text>
+                <View style={styles.riskPresetRow}>
+                  {RISK_PRESETS.map(p => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[styles.riskPresetBtn, riskPct === p && { backgroundColor: colors.primary }]}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRiskPct(p); }}
+                    >
+                      <Text style={[styles.riskPresetText, { color: riskPct === p ? '#fff' : colors.textSecondary }]}>
+                        {p}%
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Results */}
+              {riskCalc ? (
+                <View style={[styles.calcResults, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
+                  <View style={styles.calcRow}>
+                    <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Max $ at risk</Text>
+                    <Text style={[styles.calcVal, { color: colors.loss }]}>
+                      ${riskCalc.maxRiskDollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  {riskCalc.suggestedShares != null && (
+                    <View style={styles.calcRow}>
+                      <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Suggested shares</Text>
+                      <Text style={[styles.calcVal, { color: colors.textPrimary }]}>
+                        {riskCalc.suggestedShares.toFixed(1)}
+                        <Text style={{ color: colors.textTertiary, fontSize: 12 }}> shares</Text>
+                      </Text>
+                    </View>
+                  )}
+                  {riskCalc.positionSize != null && (
+                    <View style={styles.calcRow}>
+                      <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Position size</Text>
+                      <Text style={[styles.calcVal, { color: colors.textPrimary }]}>
+                        ${riskCalc.positionSize.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      </Text>
+                    </View>
+                  )}
+                  {riskCalc.rr != null && (
+                    <View style={[styles.calcRow, { borderBottomWidth: 0 }]}>
+                      <Text style={[styles.calcKey, { color: colors.textSecondary }]}>Risk / Reward</Text>
+                      <Text style={[styles.calcVal, { color: riskCalc.rr >= 2 ? colors.profit : riskCalc.rr >= 1 ? colors.open : colors.loss }]}>
+                        1 : {riskCalc.rr.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  {riskCalc.suggestedShares != null && (
+                    <TouchableOpacity
+                      style={[styles.applyBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '40' }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setQuantity(riskCalc.suggestedShares!.toFixed(1));
+                      }}
+                    >
+                      <Ionicons name="arrow-up-circle-outline" size={16} color={colors.primary} />
+                      <Text style={[styles.applyBtnText, { color: colors.primary }]}>Apply to Quantity</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <Text style={[styles.calcHint, { color: colors.textTertiary }]}>
+                  Enter account size, entry price, and stop loss to calculate position sizing.
+                </Text>
+              )}
+            </View>
+          )}
 
           <Text style={styles.sectionHeader}>Strategy</Text>
           <View style={styles.card}>
@@ -486,5 +624,42 @@ function makeStyles(c: AppColors) {
     },
     submitBtnDisabled: { opacity: 0.6 },
     submitText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+
+    // ── Risk Calculator ──
+    calcToggle: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      paddingVertical: 10, paddingHorizontal: 4, marginTop: 16,
+    },
+    calcToggleIcon: {
+      width: 30, height: 30, borderRadius: 8,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    calcToggleLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
+    calcCard: { padding: 0, marginTop: 0 },
+    calcInputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+    calcCurrency: { fontSize: 16, fontWeight: '500' },
+    calcInput: { textAlign: 'right' },
+    riskPresetRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+    riskPresetBtn: {
+      paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8,
+      backgroundColor: c.surfaceHigh,
+    },
+    riskPresetText: { fontSize: 14, fontWeight: '600' },
+    calcResults: {
+      margin: 12, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
+    },
+    calcRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: 14, paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+    },
+    calcKey: { fontSize: 13, fontWeight: '500' },
+    calcVal: { fontSize: 14, fontWeight: '700' },
+    applyBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 6, paddingVertical: 10, margin: 10, borderRadius: 8, borderWidth: 1,
+    },
+    applyBtnText: { fontSize: 14, fontWeight: '600' },
+    calcHint: { fontSize: 13, textAlign: 'center', padding: 16, lineHeight: 19 },
   });
 }

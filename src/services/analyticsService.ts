@@ -302,3 +302,49 @@ export async function getWinLossDistribution(filter: PeriodFilter): Promise<WinL
 
   return { wins, losses, breakeven };
 }
+
+// ── Win Streak ─────────────────────────────────────────────────────────────────
+// Returns the number of consecutive calendar days (ending today or yesterday)
+// on which the trader had a net-positive P&L.
+export async function getWinStreak(): Promise<{ streak: number; isActive: boolean }> {
+  const positions = await db.query.positions.findMany({
+    where: and(eq(schema.positions.status, 'closed'), isNull(schema.positions.deletedAt)),
+    columns: { realizedPnl: true, exitDate: true },
+    orderBy: [asc(schema.positions.exitDate)],
+  });
+
+  if (positions.length === 0) return { streak: 0, isActive: false };
+
+  // Group by YYYY-MM-DD
+  const dayMap = new Map<string, number>();
+  for (const p of positions) {
+    if (!p.exitDate) continue;
+    const d = new Date(p.exitDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    dayMap.set(key, (dayMap.get(key) ?? 0) + fromStoredPrice(p.realizedPnl ?? 0));
+  }
+
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  // Walk backwards from today
+  let streak = 0;
+  let isActive = false;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!dayMap.has(key)) {
+      // No trades on this day — skip weekends/holidays for first day check
+      if (streak === 0) continue; else break;
+    }
+    const pnl = dayMap.get(key)!;
+    if (pnl > 0) {
+      streak++;
+      if (key === todayKey) isActive = true;
+    } else {
+      break;
+    }
+  }
+  return { streak, isActive };
+}

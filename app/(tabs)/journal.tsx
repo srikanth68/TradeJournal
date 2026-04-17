@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useTheme, type AppColors } from '../../src/theme';
 import {
   getJournalEntries,
@@ -188,20 +189,37 @@ function TodayCard({
 }: { today: string; entry: DailyJournal | null; onPress: () => void }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const filled = entry !== null;
 
   return (
-    <TouchableOpacity style={styles.todayCard} onPress={onPress} activeOpacity={0.75}>
-      <View style={styles.todayLeft}>
-        <View style={[styles.todayDot, entry ? styles.todayDotFilled : styles.todayDotEmpty]} />
-        <View>
-          <Text style={styles.todayLabel}>Today</Text>
-          <Text style={styles.todayDate}>{formatShortDate(today)}</Text>
+    <TouchableOpacity
+      style={styles.todayCard}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }}
+      activeOpacity={0.75}
+    >
+      <View style={[styles.todayAccent, { backgroundColor: filled ? colors.primary : colors.border }]} />
+      <View style={styles.todayInner}>
+        <View style={styles.todayTop}>
+          <View>
+            <Text style={[styles.todayLabel, { color: colors.textTertiary }]}>Today</Text>
+            <Text style={[styles.todayDate, { color: colors.textPrimary }]}>{formatShortDate(today)}</Text>
+          </View>
+          <View style={[styles.todayStatusBadge, { backgroundColor: filled ? colors.primary + '18' : colors.surfaceHigh }]}>
+            <Ionicons
+              name={filled ? 'checkmark-circle' : 'pencil-outline'}
+              size={14}
+              color={filled ? colors.primary : colors.textSecondary}
+            />
+            <Text style={[styles.todayStatusText, { color: filled ? colors.primary : colors.textSecondary }]}>
+              {filled ? 'Logged' : 'Write entry'}
+            </Text>
+          </View>
         </View>
-      </View>
-      <View style={styles.todayRight}>
-        {entry
-          ? <Text style={styles.todaySnippet} numberOfLines={2}>{entrySnippet(entry)}</Text>
-          : <Text style={styles.todayWriteCta}>Write today's entry →</Text>}
+        {filled && (
+          <Text style={[styles.todaySnippet, { color: colors.textSecondary }]} numberOfLines={2}>
+            {entrySnippet(entry)}
+          </Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -209,8 +227,14 @@ function TodayCard({
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
 
+const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
+  Market:  { bg: '#EAF4FF', text: '#007AFF' },
+  Mindset: { bg: '#F3EEFF', text: '#5856D6' },
+  Lessons: { bg: '#E6FAF0', text: '#00B057' },
+};
+
 function EntryRow({ entry, onPress }: { entry: DailyJournal; onPress: () => void }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const badges = [
     entry.marketNotes?.trim() ? 'Market' : null,
@@ -219,23 +243,32 @@ function EntryRow({ entry, onPress }: { entry: DailyJournal; onPress: () => void
   ].filter(Boolean) as string[];
 
   return (
-    <TouchableOpacity style={styles.entryRow} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.entryRow}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }}
+      activeOpacity={0.7}
+    >
       <View style={styles.entryDateCol}>
-        <Text style={styles.entryDay}>
+        <Text style={[styles.entryDay, { color: colors.textPrimary }]}>
           {new Date(entry.date + 'T00:00:00').getDate()}
         </Text>
-        <Text style={styles.entryMonth}>
+        <Text style={[styles.entryMonth, { color: colors.textSecondary }]}>
           {new Date(entry.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
         </Text>
       </View>
       <View style={styles.entryContent}>
-        <Text style={styles.entrySnippetText} numberOfLines={2}>{entrySnippet(entry)}</Text>
+        <Text style={[styles.entrySnippetText, { color: colors.textPrimary }]} numberOfLines={2}>
+          {entrySnippet(entry)}
+        </Text>
         <View style={styles.entryBadges}>
-          {badges.map(b => (
-            <View key={b} style={styles.entryBadge}>
-              <Text style={styles.entryBadgeText}>{b}</Text>
-            </View>
-          ))}
+          {badges.map(b => {
+            const bc = BADGE_COLORS[b];
+            return (
+              <View key={b} style={[styles.entryBadge, { backgroundColor: isDark ? colors.surfaceHigh : bc.bg }]}>
+                <Text style={[styles.entryBadgeText, { color: isDark ? colors.textSecondary : bc.text }]}>{b}</Text>
+              </View>
+            );
+          })}
         </View>
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
@@ -346,27 +379,29 @@ function makeStyles(c: AppColors) {
     listContent: { paddingBottom: 32 },
 
     sectionHeader: {
-      fontSize: 13, fontWeight: '600', color: c.sectionHeader,
-      textTransform: 'uppercase', letterSpacing: 0.5,
+      fontSize: 12, fontWeight: '700', color: c.sectionHeader,
+      textTransform: 'uppercase', letterSpacing: 0.6,
       marginTop: 20, marginBottom: 8, marginLeft: 20,
     },
 
     todayCard: {
-      flexDirection: 'row', alignItems: 'center',
+      flexDirection: 'row',
       backgroundColor: c.surface, marginHorizontal: 16, borderRadius: 14,
-      padding: 16, gap: 14,
-      shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
+      overflow: 'hidden',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.07, shadowRadius: 8, elevation: 2,
     },
-    todayLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    todayDot: { width: 10, height: 10, borderRadius: 5 },
-    todayDotFilled: { backgroundColor: c.primary },
-    todayDotEmpty: { backgroundColor: c.textTertiary },
-    todayLabel: { fontSize: 12, color: c.textSecondary, fontWeight: '500', marginBottom: 2 },
-    todayDate: { fontSize: 15, fontWeight: '700', color: c.textPrimary },
-    todayRight: { flex: 1 },
-    todaySnippet: { fontSize: 13, color: c.textSecondary, lineHeight: 18 },
-    todayWriteCta: { fontSize: 14, color: c.primary, fontWeight: '600' },
+    todayAccent: { width: 4, alignSelf: 'stretch' },
+    todayInner: { flex: 1, padding: 16 },
+    todayTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    todayLabel: { fontSize: 11, fontWeight: '500', marginBottom: 3 },
+    todayDate: { fontSize: 16, fontWeight: '700' },
+    todayStatusBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+    },
+    todayStatusText: { fontSize: 12, fontWeight: '600' },
+    todaySnippet: { fontSize: 13, lineHeight: 18 },
 
     rowWrapper: {
       marginHorizontal: 16, backgroundColor: c.surface, borderRadius: 12, overflow: 'hidden',

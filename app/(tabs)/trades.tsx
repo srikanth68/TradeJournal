@@ -13,7 +13,9 @@ import {
 import { useTheme, type AppColors } from '../../src/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router } from 'expo-router';
-import * as FileSystem from 'expo-file-system';
+import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { getPositions, type PositionWithEntries } from '../../src/services/positionService';
 import { formatPrice, formatPnl, fromStoredPrice } from '../../src/utils/price';
@@ -22,7 +24,9 @@ import { formatPrice, formatPnl, fromStoredPrice } from '../../src/utils/price';
 
 function escapeCSV(val: string | null | undefined): string {
   if (val == null || val === '') return '';
-  const s = String(val);
+  let s = String(val);
+  // Neutralize formula injection (Excel/Sheets executes cells starting with = + - @ |)
+  if (/^[=+\-@|]/.test(s)) s = `'${s}`;
   if (s.includes(',') || s.includes('"') || s.includes('\n')) {
     return `"${s.replace(/"/g, '""')}"`;
   }
@@ -75,18 +79,14 @@ async function exportCSV(positions: PositionWithEntries[]) {
 function TickerAvatar({ ticker, tradeType, logoUrl }: { ticker: string; tradeType: 'buy' | 'short'; logoUrl?: string | null }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const bg = tradeType === 'short' ? colors.shortBadgeBg : colors.longBadgeBg;
+  const textColor = tradeType === 'short' ? colors.loss : colors.primary;
   if (logoUrl) {
-    return (
-      <Image
-        source={{ uri: logoUrl }}
-        style={styles.avatar}
-        resizeMode="contain"
-      />
-    );
+    return <Image source={{ uri: logoUrl }} style={styles.avatar} resizeMode="contain" />;
   }
   return (
-    <View style={[styles.avatar, styles.avatarFallback, tradeType === 'short' && styles.avatarShort]}>
-      <Text style={styles.avatarText}>{ticker.slice(0, 2)}</Text>
+    <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: bg }]}>
+      <Text style={[styles.avatarText, { color: textColor }]}>{ticker.slice(0, 2)}</Text>
     </View>
   );
 }
@@ -268,6 +268,7 @@ export default function TradeLogScreen() {
                   <TouchableOpacity
                     style={styles.exportBtn}
                     onPress={async () => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setExporting(true);
                       try {
                         await exportCSV([...openPositions, ...closedPositions]);
@@ -279,12 +280,16 @@ export default function TradeLogScreen() {
                       }
                     }}
                     disabled={exporting}
+                    activeOpacity={0.7}
                   >
-                    {exporting
-                      ? <ActivityIndicator size="small" color={colors.primary} />
-                      : <>
-                          <Text style={styles.exportBtnText}>Export CSV</Text>
-                        </>}
+                    {exporting ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <>
+                        <Ionicons name="download-outline" size={15} color={colors.primary} />
+                        <Text style={styles.exportBtnText}>Export CSV</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 )}
               </>
@@ -292,11 +297,29 @@ export default function TradeLogScreen() {
           }
 
           if (item.key === 'open-header') {
-            return <Text style={styles.sectionHeader}>Open Positions</Text>;
+            return (
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeader}>Open Positions</Text>
+                {openPositions.length > 0 && (
+                  <View style={[styles.sectionBadge, { backgroundColor: colors.openBadgeBg }]}>
+                    <Text style={[styles.sectionBadgeText, { color: colors.open }]}>{openPositions.length}</Text>
+                  </View>
+                )}
+              </View>
+            );
           }
 
           if (item.key === 'closed-header') {
-            return <Text style={styles.sectionHeader}>Closed Positions</Text>;
+            return (
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeader}>Closed Positions</Text>
+                {closedPositions.length > 0 && (
+                  <View style={[styles.sectionBadge, { backgroundColor: colors.closedBadgeBg }]}>
+                    <Text style={[styles.sectionBadgeText, { color: colors.profit }]}>{closedPositions.length}</Text>
+                  </View>
+                )}
+              </View>
+            );
           }
 
           if (item.key === 'open-empty') {
@@ -346,11 +369,18 @@ function makeStyles(c: AppColors) {
     },
     summaryLabel: { fontSize: 11, color: c.textSecondary, marginBottom: 4 },
     summaryValue: { fontSize: 18, fontWeight: '700', color: c.textPrimary },
-    sectionHeader: {
-      fontSize: 13, fontWeight: '600', color: c.sectionHeader,
-      textTransform: 'uppercase', letterSpacing: 0.5,
-      marginTop: 20, marginBottom: 8, marginLeft: 20,
+    sectionHeaderRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      marginTop: 20, marginBottom: 8, marginLeft: 20, marginRight: 16,
     },
+    sectionHeader: {
+      fontSize: 12, fontWeight: '700', color: c.sectionHeader,
+      textTransform: 'uppercase', letterSpacing: 0.6,
+    },
+    sectionBadge: {
+      paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
+    },
+    sectionBadgeText: { fontSize: 11, fontWeight: '700' },
     rowWrapper: {
       marginHorizontal: 16, backgroundColor: c.surface,
       borderRadius: 12, marginBottom: 8, overflow: 'hidden',
@@ -365,11 +395,8 @@ function makeStyles(c: AppColors) {
     avatar: {
       width: 44, height: 44, borderRadius: 10, backgroundColor: c.surfaceHigh,
     },
-    avatarFallback: {
-      alignItems: 'center', justifyContent: 'center',
-    },
-    avatarShort: { backgroundColor: c.loss },
-    avatarText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+    avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+    avatarText: { fontWeight: '700', fontSize: 14 },
     rowCenter: { flex: 1, minWidth: 0 },
     rowTitleRow: {
       flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4,
@@ -397,7 +424,7 @@ function makeStyles(c: AppColors) {
     emptyMinimal: { paddingVertical: 16, paddingHorizontal: 20 },
     emptyMinimalText: { fontSize: 14, color: c.textSecondary },
     exportBtn: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
       marginHorizontal: 16, marginTop: 8, marginBottom: 4,
       paddingVertical: 10, borderRadius: 10,
       backgroundColor: c.surface,
