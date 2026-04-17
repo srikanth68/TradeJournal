@@ -113,52 +113,22 @@ export default function TabLayout() {
     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
       <ProfileModal visible={profileVisible} onClose={() => setProfileVisible(false)} />
       <Tabs
-        screenOptions={({ route }) => {
-          const icons = TAB_ICONS[route.name] ?? { active: 'ellipse', inactive: 'ellipse-outline' };
-          return {
-            tabBarActiveTintColor: colors.primary,
-            tabBarInactiveTintColor: colors.textSecondary,
-            tabBarBackground: () => (
-              <BlurView
-                intensity={85}
-                tint={isDark ? 'systemChromeMaterialDark' : 'systemChromeMaterial'}
-                style={StyleSheet.absoluteFill}
-              />
-            ),
-            tabBarStyle: {
-              backgroundColor: 'transparent',
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderTopColor: colors.border,
-              elevation: 0,
-            },
-            tabBarIcon: ({ color, focused, size }) => (
-              <Ionicons
-                name={(focused ? icons.active : icons.inactive) as any}
-                size={focused ? size + 1 : size}
-                color={color}
-              />
-            ),
-            tabBarPressOpacity: 0.6,
-            headerStyle: { backgroundColor: colors.surface },
-            headerShadowVisible: false,
-            headerTitleStyle: { fontWeight: '700', fontSize: 18, color: colors.textPrimary },
-            headerRight: () => (
-              <TouchableOpacity
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setProfileVisible(true); }}
-                style={{ marginRight: 16 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                {user?.avatarUrl
-                  ? <Image source={{ uri: user.avatarUrl }} style={{ width: 30, height: 30, borderRadius: 15 }} />
-                  : (
-                    <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary + '22', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>{avatarInitial}</Text>
-                    </View>
-                  )
-                }
-              </TouchableOpacity>
-            ),
-          };
+        screenOptions={{
+          tabBarActiveTintColor: '#C9A84C',
+          tabBarInactiveTintColor: '#9B9B9B',
+          tabBarStyle: {
+            backgroundColor: '#FFFFFF',
+            borderTopColor: '#E8E8E8',
+            borderTopWidth: 1,
+          },
+          headerStyle: {
+            backgroundColor: '#FFFFFF',
+          },
+          headerTitleStyle: {
+            fontWeight: '600',
+            fontSize: 17,
+            color: '#1A1A1A',
+          },
         }}
       >
         <Tabs.Screen name="index"    options={{ title: 'Dashboard' }} />
