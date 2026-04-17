@@ -1,15 +1,25 @@
 import { useRef, useEffect } from 'react';
 import { Tabs, usePathname, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { PanResponder, View } from 'react-native';
+import { PanResponder, View, TouchableOpacity, Alert } from 'react-native';
 import { useTheme } from '../../src/theme';
+import { useAuth } from '../../src/context/AuthContext';
 
 const TAB_ORDER = ['/', '/trades', '/add', '/calendar', '/journal', '/coach'];
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
   const currentIdxRef = useRef(0);
+
+  function handleAccountPress() {
+    const title = user?.name ?? user?.email ?? (user?.provider === 'guest' ? 'Guest' : 'Account');
+    Alert.alert(title, user?.email ?? undefined, [
+      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
 
   useEffect(() => {
     const idx = TAB_ORDER.indexOf(pathname);
@@ -61,6 +71,12 @@ export default function TabLayout() {
             title: 'Dashboard',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="bar-chart" size={size} color={color} />
+            ),
+            headerShown: true,
+            headerRight: () => (
+              <TouchableOpacity onPress={handleAccountPress} style={{ marginRight: 16 }}>
+                <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
+              </TouchableOpacity>
             ),
           }}
         />

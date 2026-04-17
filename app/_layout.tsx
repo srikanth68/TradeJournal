@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { runMigrations } from '../src/db';
 import { seedStrategies, seedDemoTrades } from '../src/db/seed';
+import { AuthProvider, useAuth } from '../src/context/AuthContext';
 
-export default function RootLayout() {
+function RootNavigator() {
+  const { user, isLoaded } = useAuth();
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
@@ -16,14 +18,33 @@ export default function RootLayout() {
     })();
   }, []);
 
-  if (!dbReady) return null;
+  useEffect(() => {
+    if (!isLoaded || !dbReady) return;
+
+    if (user) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/login');
+    }
+  }, [isLoaded, dbReady, user]);
+
+  if (!isLoaded || !dbReady) return null;
 
   return (
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
       </Stack>
     </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
   );
 }
