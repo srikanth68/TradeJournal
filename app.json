@@ -13,14 +13,18 @@
       "backgroundColor": "#FFFFFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.srikanthpatel.tradeedge",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.srikanthpatel.tradeedge",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -36,6 +40,13 @@
           "iosUrlScheme": "com.googleusercontent.apps.REPLACE_WITH_YOUR_REVERSED_CLIENT_ID"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f2f6b1de-9f49-4076-ae6f-cf7262667a8c"
+      }
+    },
+    "owner": "srikanth68"
   }
 }
