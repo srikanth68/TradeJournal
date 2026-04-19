@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "remote": "bash start-tunnel.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
