@@ -1,7 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import { Tabs, usePathname, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { PanResponder, View, TouchableOpacity, Alert } from 'react-native';
+import { PanResponder, View, TouchableOpacity, Alert, Modal, StyleSheet, Text } from 'react-native';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
 import { useAuth } from '../../src/context/AuthContext';
 
@@ -38,20 +40,15 @@ function ProfileModal({ visible, onClose }: { visible: boolean; onClose: () => v
       <View style={[ps.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {/* Avatar */}
         <View style={[ps.avatarRow, { borderBottomColor: colors.border }]}>
-          {user?.avatarUrl
-            ? <Image source={{ uri: user.avatarUrl }} style={ps.avatar} />
-            : (
-              <View style={[ps.avatarFallback, { backgroundColor: colors.primary + '22' }]}>
-                <Text style={[ps.avatarInitial, { color: colors.primary }]}>
-                  {(user?.name ?? 'T')[0].toUpperCase()}
-                </Text>
-              </View>
-            )
-          }
+          <View style={[ps.avatarFallback, { backgroundColor: colors.primary + '22' }]}>
+            <Text style={[ps.avatarInitial, { color: colors.primary }]}>
+              {(user?.name ?? 'T')[0].toUpperCase()}
+            </Text>
+          </View>
           <View style={ps.userInfo}>
             <Text style={[ps.userName, { color: colors.textPrimary }]}>{user?.name ?? 'Trader'}</Text>
             <Text style={[ps.userEmail, { color: colors.textSecondary }]}>
-              {user?.isGuest ? 'Guest · local data only' : user?.email ?? ''}
+              {user?.provider === 'guest' ? 'Guest · local data only' : user?.email ?? ''}
             </Text>
           </View>
         </View>
@@ -76,16 +73,12 @@ export default function TabLayout() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
   const currentIdxRef = useRef(0);
   const [profileVisible, setProfileVisible] = useState(false);
 
   function handleAccountPress() {
-    const title = user?.name ?? user?.email ?? (user?.provider === 'guest' ? 'Guest' : 'Account');
-    Alert.alert(title, user?.email ?? undefined, [
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setProfileVisible(true);
   }
 
   useEffect(() => {
@@ -118,20 +111,20 @@ export default function TabLayout() {
       <ProfileModal visible={profileVisible} onClose={() => setProfileVisible(false)} />
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: '#C9A84C',
-          tabBarInactiveTintColor: '#9B9B9B',
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: '#FFFFFF',
-            borderTopColor: '#E8E8E8',
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
             borderTopWidth: 1,
           },
           headerStyle: {
-            backgroundColor: '#FFFFFF',
+            backgroundColor: colors.surface,
           },
           headerTitleStyle: {
             fontWeight: '600',
             fontSize: 17,
-            color: '#1A1A1A',
+            color: colors.textPrimary,
           },
         }}
       >
