@@ -2,9 +2,12 @@ import { eq, desc, isNull, and } from 'drizzle-orm';
 import { db, schema } from '../db';
 import { toStoredPrice } from '../utils/price';
 import { generateUUID } from '../utils/uuid';
-import type { NewPosition, NewPositionEntry, Position, PositionEntry } from '../db/schema';
+import type { NewPosition, NewPositionEntry, Position, PositionEntry, Strategy } from '../db/schema';
 
-export type PositionWithEntries = Position & { entries: PositionEntry[] };
+export type PositionWithEntries = Position & {
+  entries: PositionEntry[];
+  strategy?: Strategy | null;
+};
 
 type CreatePositionData = {
   ticker: string;
@@ -153,7 +156,7 @@ export async function getPositions(status?: 'open' | 'closed'): Promise<Position
     where: status
       ? and(eq(schema.positions.status, status), isNull(schema.positions.deletedAt))
       : isNull(schema.positions.deletedAt),
-    with: { entries: true },
+    with: { entries: true, strategy: true },
     orderBy: [desc(schema.positions.createdAt)],
   });
 
@@ -163,7 +166,7 @@ export async function getPositions(status?: 'open' | 'closed'): Promise<Position
 export async function getPosition(id: string): Promise<PositionWithEntries | undefined> {
   const result = await db.query.positions.findFirst({
     where: eq(schema.positions.id, id),
-    with: { entries: true },
+    with: { entries: true, strategy: true },
   });
 
   return result as PositionWithEntries | undefined;

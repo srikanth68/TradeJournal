@@ -3,8 +3,8 @@ import { useColorScheme } from 'react-native';
 export const lightColors = {
   background:    '#FFFFFF',
   surface:       '#F5F5F5',
-  surfaceHigh:   '#F5F5F5',
-  surfaceDark:   '#E8E8E8',
+  surfaceHigh:   '#EBEBEB',    // distinct from surface for chips/controls inside cards
+  surfaceDark:   '#DCDCDC',
   textPrimary:   '#1A1A1A',
   textSecondary: '#6B6B6B',
   textTertiary:  '#9B9B9B',
@@ -14,10 +14,11 @@ export const lightColors = {
   overlay:       'rgba(0,0,0,0.35)',
   profit:        '#2E7D32',
   loss:          '#C62828',
+  warning:       '#E65100',    // amber/orange — used for grade C, warnings
   open:          '#C9A84C',
   primary:       '#C9A84C',
   primaryLight:  '#E8C96A',
-  purple:        '#6B6B6B',
+  purple:        '#5856D6',    // indigo — used for selected emotion chips
   longBadgeBg:   '#FDF8EC',
   shortBadgeBg:  '#FDE8E8',
   openBadgeBg:   '#FDF8EC',
@@ -29,8 +30,8 @@ export const lightColors = {
 export const darkColors: typeof lightColors = {
   background:    '#FFFFFF',
   surface:       '#F5F5F5',
-  surfaceHigh:   '#F5F5F5',
-  surfaceDark:   '#E8E8E8',
+  surfaceHigh:   '#EBEBEB',
+  surfaceDark:   '#DCDCDC',
   textPrimary:   '#1A1A1A',
   textSecondary: '#6B6B6B',
   textTertiary:  '#9B9B9B',
@@ -40,10 +41,11 @@ export const darkColors: typeof lightColors = {
   overlay:       'rgba(0,0,0,0.35)',
   profit:        '#2E7D32',
   loss:          '#C62828',
+  warning:       '#E65100',
   open:          '#C9A84C',
   primary:       '#C9A84C',
   primaryLight:  '#E8C96A',
-  purple:        '#6B6B6B',
+  purple:        '#5856D6',
   longBadgeBg:   '#FDF8EC',
   shortBadgeBg:  '#FDE8E8',
   openBadgeBg:   '#FDF8EC',
@@ -53,7 +55,6 @@ export const darkColors: typeof lightColors = {
 
 export type AppColors = typeof lightColors;
 
-// Shared shadow style for all elevated cards
 export const cardShadow = {
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 2 },

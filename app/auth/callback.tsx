@@ -18,8 +18,8 @@ export default function AuthCallback() {
   }, [params.code]);
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0A0F' }}>
-      <ActivityIndicator color="#4F8EF7" size="large" />
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' }}>
+      <ActivityIndicator color="#C9A84C" size="large" />
     </View>
   );
 }
