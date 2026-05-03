@@ -54,7 +54,7 @@ async function exportCSV(positions: PositionWithEntries[]) {
       avgEntry, exit,
       p.totalQuantity != null ? String(p.totalQuantity) : '',
       pnl,
-      escapeCSV(p.strategyId ?? ''),
+      escapeCSV(p.strategy?.name ?? ''),
       escapeCSV(p.tradeGrade),
       escapeCSV(p.emotionTag),
       escapeCSV(p.setupNotes),

@@ -25,18 +25,22 @@ import {
   softDeletePosition,
   type PositionWithEntries,
 } from '../../src/services/positionService';
-import { db, schema } from '../../src/db';
 import { formatPrice, formatPnl, fromStoredPrice } from '../../src/utils/price';
 import { useTheme, type AppColors } from '../../src/theme';
-import type { Strategy } from '../../src/db/schema';
 
-const GRADE_COLORS: Record<string, string> = {
-  A: '#34C759', B: '#007AFF', C: '#FF9500', D: '#FF3B30',
-};
 const EMOTION_LABELS: Record<string, string> = {
   confident: 'Confident', fomo: 'FOMO', hesitant: 'Hesitant',
   revenge: 'Revenge', bored: 'Bored', patient: 'Patient',
 };
+
+function getGradeColor(grade: string, c: AppColors): string {
+  switch (grade) {
+    case 'A': return c.profit;
+    case 'B': return c.primary;
+    case 'C': return c.warning;
+    default:  return c.loss;
+  }
+}
 
 // ─── Add Entry Modal ─────────────────────────────────────────────────────────
 
@@ -93,7 +97,7 @@ function AddEntryModal({ visible, positionId, onDone, onClose }: AddEntryModalPr
           <View style={modalStyles.header}>
             <Text style={modalStyles.title}>Add Entry</Text>
             <TouchableOpacity onPress={() => { reset(); onClose(); }}>
-              <Ionicons name="close-circle" size={28} color="#8E8E93" />
+              <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <ScrollView style={modalStyles.scroll} contentContainerStyle={modalStyles.scrollContent}>
@@ -166,7 +170,7 @@ function ClosePositionModal({ visible, positionId, onDone, onClose }: CloseModal
           <View style={modalStyles.header}>
             <Text style={modalStyles.title}>Close Position</Text>
             <TouchableOpacity onPress={() => { reset(); onClose(); }}>
-              <Ionicons name="close-circle" size={28} color="#8E8E93" />
+              <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <ScrollView style={modalStyles.scroll} contentContainerStyle={modalStyles.scrollContent}>
@@ -244,7 +248,7 @@ function EditModal({ visible, position, onDone, onClose }: EditModalProps) {
           <View style={modalStyles.header}>
             <Text style={modalStyles.title}>Edit Trade</Text>
             <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close-circle" size={28} color="#8E8E93" />
+              <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <ScrollView style={modalStyles.scroll} contentContainerStyle={modalStyles.scrollContent}>
@@ -265,7 +269,7 @@ function EditModal({ visible, position, onDone, onClose }: EditModalProps) {
                 {(['A', 'B', 'C', 'D'] as TradeGrade[]).map(g => (
                   <TouchableOpacity
                     key={g}
-                    style={[modalStyles.gradeBtn, grade === g && { backgroundColor: GRADE_COLORS[g] }]}
+                    style={[modalStyles.gradeBtn, grade === g && { backgroundColor: getGradeColor(g, colors) }]}
                     onPress={() => setGrade(grade === g ? undefined : g)}
                   >
                     <Text style={[modalStyles.gradeText, grade === g && modalStyles.gradeTextActive]}>{g}</Text>
@@ -296,6 +300,7 @@ function EditModal({ visible, position, onDone, onClose }: EditModalProps) {
               <TextInput
                 style={modalStyles.textarea}
                 placeholder="Pre-trade thesis and setup..."
+                placeholderTextColor={colors.textTertiary}
                 value={setupNotes}
                 onChangeText={setSetupNotes}
                 multiline
@@ -309,6 +314,7 @@ function EditModal({ visible, position, onDone, onClose }: EditModalProps) {
               <TextInput
                 style={modalStyles.textarea}
                 placeholder="Post-trade review, lessons learned..."
+                placeholderTextColor={colors.textTertiary}
                 value={notes}
                 onChangeText={setNotes}
                 multiline
@@ -368,7 +374,6 @@ export default function PositionDetailScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [position, setPosition] = useState<PositionWithEntries | null>(null);
-  const [strategy, setStrategy] = useState<Strategy | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showClose, setShowClose] = useState(false);
@@ -378,16 +383,7 @@ export default function PositionDetailScreen() {
     if (!id) return;
     try {
       const pos = await getPosition(id);
-      if (pos) {
-        setPosition(pos);
-        if (pos.strategyId) {
-          const strats = await db.select().from(schema.strategies);
-          const found = strats.find(s => s.id === pos.strategyId);
-          setStrategy(found ?? null);
-        } else {
-          setStrategy(null);
-        }
-      }
+      setPosition(pos ?? null);
     } catch (e) {
       console.error('Failed to load position:', e);
     } finally {
@@ -453,7 +449,7 @@ export default function PositionDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={styles.loadingCenter}><ActivityIndicator size="large" color="#007AFF" /></View>
+        <View style={styles.loadingCenter}><ActivityIndicator size="large" color={colors.primary} /></View>
       </SafeAreaView>
     );
   }
@@ -481,15 +477,15 @@ export default function PositionDetailScreen() {
       {/* Header */}
       <View style={styles.navHeader}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#007AFF" />
+          <Ionicons name="chevron-back" size={24} color={colors.primary} />
           <Text style={styles.backText}>Trades</Text>
         </TouchableOpacity>
         <View style={styles.navActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => setShowEdit(true)}>
-            <Ionicons name="create-outline" size={22} color="#007AFF" />
+            <Ionicons name="create-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
-            <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+            <Ionicons name="trash-outline" size={22} color={colors.loss} />
           </TouchableOpacity>
         </View>
       </View>
@@ -497,7 +493,6 @@ export default function PositionDetailScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Hero Card */}
         <View style={styles.heroCard}>
-          {/* Top accent stripe — green/red/orange based on status */}
           <View style={[
             styles.heroAccent,
             isOpen ? styles.heroAccentOpen
@@ -568,17 +563,17 @@ export default function PositionDetailScreen() {
         <View style={styles.card}>
           <DetailRow label="Quantity" value={position.totalQuantity != null ? String(position.totalQuantity) : '—'} />
           <DetailSep />
-          <DetailRow label="Strategy" value={strategy?.name ?? '—'} />
+          <DetailRow label="Strategy" value={position.strategy?.name ?? '—'} />
           <DetailSep />
           {position.stopLossPrice != null && (
             <>
-              <DetailRow label="Stop Loss" value={formatPrice(position.stopLossPrice)} valueColor="#FF3B30" />
+              <DetailRow label="Stop Loss" value={formatPrice(position.stopLossPrice)} valueColor={colors.loss} />
               <DetailSep />
             </>
           )}
           {position.targetPrice != null && (
             <>
-              <DetailRow label="Target" value={formatPrice(position.targetPrice)} valueColor="#34C759" />
+              <DetailRow label="Target" value={formatPrice(position.targetPrice)} valueColor={colors.profit} />
               <DetailSep />
             </>
           )}
@@ -587,7 +582,7 @@ export default function PositionDetailScreen() {
               <DetailRow
                 label="Grade"
                 value={position.tradeGrade}
-                valueColor={GRADE_COLORS[position.tradeGrade]}
+                valueColor={getGradeColor(position.tradeGrade, colors)}
               />
               <DetailSep />
             </>
@@ -704,7 +699,7 @@ export default function PositionDetailScreen() {
         {isOpen && (
           <View style={styles.actionsRow}>
             <TouchableOpacity style={styles.addEntryBtn} onPress={() => setShowAddEntry(true)}>
-              <Ionicons name="add" size={18} color="#007AFF" />
+              <Ionicons name="add" size={18} color={colors.primary} />
               <Text style={styles.addEntryText}>Add Entry</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.closePositionBtn} onPress={() => setShowClose(true)}>

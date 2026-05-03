@@ -15,18 +15,24 @@ function buildTradeContext(positions: PositionWithEntries[]): string {
   const losses = closed.filter(p => (p.realizedPnl ?? 0) <= 0).length;
   const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
 
-  // Top strategies by P&L
+  // Strategy P&L breakdown
   const byStrategy: Record<string, { pnl: number; count: number }> = {};
   for (const p of closed) {
-    const s = p.strategyId ?? 'No Strategy';
-    byStrategy[s] = { pnl: (byStrategy[s]?.pnl ?? 0) + (p.realizedPnl ?? 0), count: (byStrategy[s]?.count ?? 0) + 1 };
+    const name = p.strategy?.name ?? p.strategyId ?? 'No Strategy';
+    byStrategy[name] = {
+      pnl: (byStrategy[name]?.pnl ?? 0) + (p.realizedPnl ?? 0),
+      count: (byStrategy[name]?.count ?? 0) + 1,
+    };
   }
 
-  // Emotion P&L
+  // Emotion P&L breakdown
   const byEmotion: Record<string, { pnl: number; count: number }> = {};
   for (const p of closed) {
     if (!p.emotionTag) continue;
-    byEmotion[p.emotionTag] = { pnl: (byEmotion[p.emotionTag]?.pnl ?? 0) + (p.realizedPnl ?? 0), count: (byEmotion[p.emotionTag]?.count ?? 0) + 1 };
+    byEmotion[p.emotionTag] = {
+      pnl: (byEmotion[p.emotionTag]?.pnl ?? 0) + (p.realizedPnl ?? 0),
+      count: (byEmotion[p.emotionTag]?.count ?? 0) + 1,
+    };
   }
 
   const recent = [...closed]
@@ -34,9 +40,14 @@ function buildTradeContext(positions: PositionWithEntries[]): string {
     .slice(0, 10)
     .map(p => {
       const pnlVal = fromStoredPrice(p.realizedPnl ?? 0);
-      return `- ${p.ticker} (${p.tradeType === 'buy' ? 'LONG' : 'SHORT'}): $${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(2)}, grade=${p.tradeGrade ?? '?'}, emotion=${p.emotionTag ?? '?'}`;
+      return `- ${p.ticker} (${p.tradeType === 'buy' ? 'LONG' : 'SHORT'}): ${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)}, grade=${p.tradeGrade ?? '?'}, emotion=${p.emotionTag ?? '?'}`;
     })
     .join('\n');
+
+  const strategySummary = Object.entries(byStrategy)
+    .sort(([, a], [, b]) => b.pnl - a.pnl)
+    .map(([name, v]) => `${name}: $${fromStoredPrice(v.pnl).toFixed(0)} over ${v.count} trades`)
+    .join(', ');
 
   const emotionSummary = Object.entries(byEmotion)
     .map(([e, v]) => `${e}: avg $${(fromStoredPrice(v.pnl) / v.count).toFixed(0)} over ${v.count} trades`)
@@ -48,6 +59,9 @@ Open positions: ${open.length}
 Closed trades: ${closed.length}
 Win rate: ${winRate}% (${wins}W / ${losses}L)
 Total realized P&L: $${fromStoredPrice(totalPnl).toFixed(2)}
+
+STRATEGY P&L BREAKDOWN
+${strategySummary || 'No strategy data yet'}
 
 EMOTION TAG P&L BREAKDOWN
 ${emotionSummary || 'No emotion data yet'}
@@ -83,13 +97,6 @@ export async function streamCoachReply(
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   const tradeContext = buildTradeContext(positions);
 
-  const contextMessage: Anthropic.MessageParam = {
-    role: 'user',
-    content: `[TRADE DATA — updated each session]\n${tradeContext}`,
-  };
-
-  const systemWithContext = `${SYSTEM_PROMPT}\n\n${tradeContext}`;
-
   const messages: Anthropic.MessageParam[] = history.map(m => ({
     role: m.role,
     content: m.content,
@@ -99,7 +106,18 @@ export async function streamCoachReply(
     const stream = await client.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 512,
-      system: systemWithContext,
+      system: [
+        {
+          type: 'text',
+          text: SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+        {
+          type: 'text',
+          text: `TRADE DATA (current session):\n${tradeContext}`,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages,
     });
 
