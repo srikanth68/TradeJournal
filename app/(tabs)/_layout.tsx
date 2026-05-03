@@ -1,11 +1,17 @@
 import { useRef, useEffect, useState } from 'react';
 import { Tabs, usePathname, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { PanResponder, View, TouchableOpacity, Alert, Modal, StyleSheet, Text } from 'react-native';
+import { PanResponder, View, TouchableOpacity, Alert, Modal, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  uploadBackup,
+  listDriveBackups,
+  restoreFromDrive,
+  type DriveBackupFile,
+} from '../../src/services/driveService';
 
 const TAB_ORDER = ['/', '/trades', '/add', '/calendar', '/journal', '/coach'];
 
@@ -20,7 +26,8 @@ const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
 
 function ProfileModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors, isDark } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, signOut, getDriveToken } = useAuth();
+  const [driveOp, setDriveOp] = useState<'backup' | 'restore' | null>(null);
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -31,6 +38,77 @@ function ProfileModal({ visible, onClose }: { visible: boolean; onClose: () => v
       },
     ]);
   };
+
+  async function handleBackup() {
+    setDriveOp('backup');
+    try {
+      const token = await getDriveToken();
+      if (!token) {
+        Alert.alert('Error', 'Could not get Google credentials. Try signing out and back in.');
+        return;
+      }
+      await uploadBackup(token);
+      Alert.alert('Backup complete', 'Your trade data has been saved to Google Drive → TradeJournal.');
+    } catch (e: any) {
+      Alert.alert('Backup failed', e.message ?? 'Something went wrong');
+    } finally {
+      setDriveOp(null);
+    }
+  }
+
+  async function handleRestore() {
+    const token = await getDriveToken();
+    if (!token) {
+      Alert.alert('Error', 'Could not get Google credentials. Try signing out and back in.');
+      return;
+    }
+
+    setDriveOp('restore');
+    let backups: DriveBackupFile[];
+    try {
+      backups = await listDriveBackups(token);
+    } catch (e: any) {
+      Alert.alert('Restore failed', e.message ?? 'Could not fetch backups');
+      setDriveOp(null);
+      return;
+    }
+    setDriveOp(null);
+
+    if (backups.length === 0) {
+      Alert.alert('No backups found', 'No TradeJournal backups found in your Google Drive.');
+      return;
+    }
+
+    const buttons = backups.slice(0, 6).map((b) => ({
+      text: b.name.replace('TradeJournal Backup ', '').replace('.json', ''),
+      onPress: () => {
+        Alert.alert(
+          'Restore backup?',
+          `This will replace ALL current local data with "${b.name}". This cannot be undone.`,
+          [
+            { text: 'Cancel', style: 'cancel' as const },
+            {
+              text: 'Restore', style: 'destructive' as const,
+              onPress: async () => {
+                setDriveOp('restore');
+                try {
+                  await restoreFromDrive(token, b.id);
+                  Alert.alert('Restored', 'Your data has been restored from Google Drive.');
+                  onClose();
+                } catch (e: any) {
+                  Alert.alert('Restore failed', e.message ?? 'Something went wrong');
+                } finally {
+                  setDriveOp(null);
+                }
+              },
+            },
+          ],
+        );
+      },
+    }));
+    buttons.push({ text: 'Cancel', onPress: () => {} } as any);
+    Alert.alert('Choose a backup', 'Select a backup to restore:', buttons as any);
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -59,6 +137,42 @@ function ProfileModal({ visible, onClose }: { visible: boolean; onClose: () => v
           <Text style={[ps.menuLabel, { color: colors.textPrimary }]}>Settings</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
         </TouchableOpacity>
+
+        {/* Google Drive backup — only visible for Google-authenticated users */}
+        {user?.provider === 'google' && (
+          <>
+            <View style={[ps.sectionLabel, { borderBottomColor: colors.border, borderTopColor: colors.border }]}>
+              <Ionicons name="cloud-outline" size={13} color={colors.textTertiary} />
+              <Text style={[ps.sectionLabelText, { color: colors.textTertiary }]}>Google Drive</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[ps.menuItem, { borderBottomColor: colors.border }]}
+              onPress={handleBackup}
+              disabled={!!driveOp}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="cloud-upload-outline" size={20} color={colors.textPrimary} />
+              <Text style={[ps.menuLabel, { color: colors.textPrimary }]}>Back Up Now</Text>
+              {driveOp === 'backup'
+                ? <ActivityIndicator size="small" color={colors.primary} />
+                : <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[ps.menuItem, { borderBottomColor: colors.border }]}
+              onPress={handleRestore}
+              disabled={!!driveOp}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="cloud-download-outline" size={20} color={colors.textPrimary} />
+              <Text style={[ps.menuLabel, { color: colors.textPrimary }]}>Restore from Drive</Text>
+              {driveOp === 'restore'
+                ? <ActivityIndicator size="small" color={colors.primary} />
+                : <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
+            </TouchableOpacity>
+          </>
+        )}
 
         <TouchableOpacity style={ps.menuItem} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={20} color={colors.loss} />
@@ -221,4 +335,11 @@ const ps = StyleSheet.create({
     gap: 14, borderBottomWidth: StyleSheet.hairlineWidth,
   },
   menuLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
+  sectionLabel: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 8, gap: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sectionLabelText: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
 });

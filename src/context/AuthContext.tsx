@@ -20,7 +20,10 @@ import {
 const GOOGLE_WEB_CLIENT_ID =
   'REPLACE_WITH_YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
 
-GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+GoogleSignin.configure({
+  webClientId: GOOGLE_WEB_CLIENT_ID,
+  scopes: ['https://www.googleapis.com/auth/drive.file'],
+});
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -40,6 +43,7 @@ interface AuthContextValue {
   signInWithGoogle: () => Promise<void>;
   continueAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
+  getDriveToken: () => Promise<string | null>;
 }
 
 // ─── Storage key ─────────────────────────────────────────────────────────────
@@ -126,6 +130,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  // ── Get a fresh Google Drive access token ─────────────────────────────────
+  async function getDriveToken(): Promise<string | null> {
+    if (user?.provider !== 'google') return null;
+    try {
+      const { accessToken } = await GoogleSignin.getTokens();
+      return accessToken;
+    } catch {
+      return null;
+    }
+  }
+
   // ── Sign out — clears identity only, trade data is untouched ───────────────
   async function signOut() {
     await AsyncStorage.removeItem(STORAGE_KEY);
@@ -141,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoaded, signInWithApple, signInWithGoogle, continueAsGuest, signOut }}
+      value={{ user, isLoaded, signInWithApple, signInWithGoogle, continueAsGuest, signOut, getDriveToken }}
     >
       {children}
     </AuthContext.Provider>
